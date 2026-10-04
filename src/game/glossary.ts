@@ -26,6 +26,8 @@ export const GLOSSARY: Record<string, string> = {
     'Rules saying who may read (r), write (w) and execute (x) a file. `ls -l` shows them as three groups: the owner, the group, and everyone else.',
   'shell history':
     'The shell remembers the commands you type and saves them in `~/.bash_history`, so you can recall them later with the Up arrow.',
+  database:
+    'A program that stores an organisation\'s records, such as orders or shipments, and answers questions about them. It has its own logins and passwords.',
   password: 'A secret that proves you are who you say you are. Anyone who learns it can act as you.',
   credentials: 'Anything that proves identity, such as a username and password, a key or a token.',
   'password reuse':
