@@ -33,7 +33,7 @@ describe('First Day on the Box', () => {
     expect(current(r)).toBe('hidden');
 
     expect(run(r, 'ls -a')).toBe('.  ..  .bash_history  .bashrc  .profile  private  scripts\n');
-    expect(run(r, 'cat .bash_history')).toContain('mysql -u tracking_admin -pTidewater#22 tracking');
+    expect(run(r, 'cat .bash_history')).toContain('sshpass -p Tidewater#22 rsync -a /var/backups/ mwalker@10.20.0.40:/srv/backups/harborline/');
     expect(current(r)).toBe('su');
 
     expect(su(r, 'letmein')).toMatchObject({ exitCode: 1 });
