@@ -15,6 +15,22 @@ export const echo: Command = {
   },
 };
 
+export const truthy: Command = {
+  name: 'true',
+  summary: 'Do nothing, successfully (exit status 0)',
+  run() {
+    return 0;
+  },
+};
+
+export const falsy: Command = {
+  name: 'false',
+  summary: 'Do nothing, unsuccessfully (exit status 1)',
+  run() {
+    return 1;
+  },
+};
+
 export const clear: Command = {
   name: 'clear',
   summary: 'Clear the screen (Ctrl+L also works)',
@@ -73,4 +89,4 @@ export const history: Command = {
   },
 };
 
-export const builtins: Command[] = [clear, echo, help, history];
+export const builtins: Command[] = [clear, echo, falsy, help, history, truthy];

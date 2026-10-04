@@ -50,8 +50,9 @@ export const sudo: Command = {
   name: 'sudo',
   summary: 'Run a command as another user, usually root (sudo <command>)',
   run(ctx) {
-    const { args, err, session } = ctx;
+    const { args, out, err, session } = ctx;
     let target = 'root';
+    let list = false;
     let i = 0;
     for (; i < args.length && args[i].startsWith('-'); i++) {
       if (args[i] === '-u') {
@@ -65,6 +66,9 @@ export const sudo: Command = {
         // Forget the cached authentication, like real sudo -k.
         session.sudoAuthed = false;
         return 0;
+      } else if (args[i] === '-l' || args[i] === '--list') {
+        // List what the user may run: the standard privilege-enumeration step.
+        list = true;
       } else {
         err(`sudo: invalid option -- '${args[i].replace(/^-+/, '')[0] ?? ''}'\n`);
         return 1;
@@ -72,27 +76,42 @@ export const sudo: Command = {
     }
 
     const words = args.slice(i);
-    if (words.length === 0) {
+    if (!list && words.length === 0) {
       err('usage: sudo command [arg ...]\n');
       return 1;
     }
-    if (!session.machine.account(target)) {
+    if (!list && !session.machine.account(target)) {
       err(`sudo: unknown user: ${target}\n`);
       return 1;
     }
 
     const who = session.credentials();
-    // root may run anything as anyone, with no password.
-    if (who.uid === 0) return session.runAs(target, words, ctx);
+    const host = session.machine.hostname;
+    const maySudo = who.uid === 0 || who.groups.includes('sudo');
 
-    // Everyone else must be allowed by being in the sudo group.
-    if (!who.groups.includes('sudo')) {
-      err(`${session.user} is not in the sudoers file. This incident will be reported.\n`);
-      return 1;
-    }
-
-    const run = (io: { out: (t: string) => void; err: (t: string) => void }) =>
-      session.runAs(target, words, {
+    // What happens once the user has proved who they are (root need not).
+    const proceed = (io: { out: (t: string) => void; err: (t: string) => void }): number => {
+      // Real sudo asks for the password first, then tells a non-sudoer they are not allowed.
+      if (!maySudo) {
+        io.err(
+          list
+            ? `Sorry, user ${session.user} may not run sudo on ${host}.\n`
+            : `${session.user} is not in the sudoers file. This incident will be reported.\n`,
+        );
+        return 1;
+      }
+      if (who.uid !== 0) session.sudoAuthed = true;
+      if (list) {
+        io.out(
+          `Matching Defaults entries for ${session.user} on ${host}:\n` +
+            '    env_reset, mail_badpass,\n' +
+            '    secure_path=/usr/local/sbin\\:/usr/local/bin\\:/usr/sbin\\:/usr/bin\\:/sbin\\:/bin\n\n' +
+            `User ${session.user} may run the following commands on ${host}:\n` +
+            '    (ALL : ALL) ALL\n',
+        );
+        return 0;
+      }
+      return session.runAs(target, words, {
         input: ctx.input,
         out: io.out,
         err: io.err,
@@ -100,21 +119,23 @@ export const sudo: Command = {
         askInput: ctx.askInput,
         stdoutIsTerminal: ctx.stdoutIsTerminal,
       });
+    };
 
+    // root may run anything as anyone, with no password.
+    if (who.uid === 0) return proceed({ out, err });
     // sudo remembers a correct password for a while; if it already has, don't ask again.
-    if (session.sudoAuthed) return session.runAs(target, words, ctx);
+    if (session.sudoAuthed) return proceed({ out, err });
 
-    const account = session.machine.account(session.user)!;
+    const account = session.machine.account(session.user);
     ctx.askInput({
       prompt: `[sudo] password for ${session.user}: `,
       secret: true,
       onInput(password, io) {
-        if (account.password === undefined || password !== account.password) {
+        if (!account || account.password === undefined || password !== account.password) {
           io.err('Sorry, try again.\nsudo: Authentication failure\n');
           return 1;
         }
-        session.sudoAuthed = true;
-        return run(io);
+        return proceed(io);
       },
     });
     return 0;

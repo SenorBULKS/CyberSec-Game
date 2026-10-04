@@ -156,14 +156,35 @@ describe('sudo', () => {
     expect(sh.execute('sudo cat /root/secret.txt').input).toMatchObject({ prompt: '[sudo] password for newhire: ' });
   });
 
-  it('refuses a user who is not in the sudoers file', () => {
+  it('asks a non-sudoer for their password first, then refuses them', () => {
     const machine = new Machine('harborline');
     machine.addUser({ name: 'guest', uid: 1005, password: 'x' });
     const sh = new Shell({ machine, user: 'guest' });
-    const r = sh.execute('sudo cat /etc/shadow');
+    const first = sh.execute('sudo cat /etc/shadow');
+    // Real sudo prompts before telling you that you are not a sudoer.
+    expect(first.input).toMatchObject({ prompt: '[sudo] password for guest: ', secret: true });
+    const r = first.input!.submit('x');
     expect(r.output).toBe('guest is not in the sudoers file. This incident will be reported.\n');
     expect(r.exitCode).toBe(1);
-    expect(r.input).toBeUndefined();
+  });
+
+  it('lists the allowed commands for a sudoer with sudo -l', () => {
+    const sh = sudoShell();
+    const first = sh.execute('sudo -l');
+    expect(first.input).toMatchObject({ prompt: '[sudo] password for newhire: ' });
+    const r = first.input!.submit('hunter2');
+    expect(r.output).toContain('User newhire may run the following commands on harborline:');
+    expect(r.output).toContain('(ALL : ALL) ALL');
+    expect(r.exitCode).toBe(0);
+  });
+
+  it('tells a non-sudoer they may not run sudo with sudo -l', () => {
+    const machine = new Machine('harborline');
+    machine.addUser({ name: 'guest', uid: 1005, password: 'x' });
+    const sh = new Shell({ machine, user: 'guest' });
+    const r = sh.execute('sudo -l').input!.submit('x');
+    expect(r.output).toBe('Sorry, user guest may not run sudo on harborline.\n');
+    expect(r.exitCode).toBe(1);
   });
 
   it('emits a command event for the elevated command, run as root', () => {
