@@ -76,8 +76,44 @@ describe('Reading the Logs', () => {
   });
 
   it('defines the new glossary terms it introduces', () => {
-    for (const term of ['log file', 'pipe', 'brute-force', 'monitoring']) {
+    for (const term of ['log file', 'pipe', 'brute-force', 'monitoring', 'credential stuffing']) {
       expect(lookupTerm(term)).toBeTruthy();
     }
+  });
+
+  it('scopes the early triggers to their own files (QA)', () => {
+    const r = new ChallengeRun(readingLogs);
+    // Reading an unrelated file does not tick "Read the note from Dana".
+    run(r, 'cat /etc/hostname');
+    expect(current(r)).toBe('read-task');
+    run(r, 'cat task.txt');
+    expect(current(r)).toBe('list-logs');
+    run(r, 'ls /var/log');
+    expect(current(r)).toBe('size');
+    // wc on some other file does not satisfy "see how big auth.log is".
+    run(r, 'wc -l /etc/passwd');
+    expect(current(r)).toBe('size');
+    run(r, 'wc -l /var/log/auth.log');
+    expect(current(r)).toBe('tail');
+    // tail on some other file does not satisfy the auth.log glance.
+    run(r, 'tail /etc/passwd');
+    expect(current(r)).toBe('tail');
+    run(r, 'tail /var/log/auth.log');
+    expect(current(r)).toBe('failed');
+  });
+
+  it('keeps the clock, banner and log dates consistent (QA)', () => {
+    const r = new ChallengeRun(readingLogs);
+    // 1 Oct 2026 is a Thursday; the banner must agree.
+    expect(readingLogs.motd).toContain('Last login: Thu Oct  1');
+    const log = run(r, 'cat /var/log/auth.log');
+    expect(log).not.toContain('Oct  3');
+    // The evening-before activity is dated before the overnight break-in.
+    expect(log).toContain('Oct  1 22:30');
+    expect(log).toContain('Oct  2 02:15:44 harborline sshd[2140]: Accepted password for mwalker');
+    // Files show a time, not a year, because the clock sits just after them.
+    const listing = run(r, 'ls -l /var/log/auth.log');
+    expect(listing).toMatch(/\d\d:\d\d \/var\/log\/auth\.log/);
+    expect(listing).not.toMatch(/2026 \/var\/log\/auth\.log/);
   });
 });

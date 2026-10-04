@@ -36,6 +36,8 @@ export const GLOSSARY: Record<string, string> = {
     'The `|` symbol, which feeds one command’s output straight into the next, like `grep error log | wc -l`. It lets you build a bigger tool out of small ones.',
   'brute-force':
     'Breaking in by trying many passwords or keys until one works. In a log it looks like a burst of failed logins from one address in a short time.',
+  'credential stuffing':
+    'Logging in with a username and password stolen from somewhere else, betting the person reused them. Unlike brute-force guessing the password is already correct, so it can work on the first try and leaves almost no failed attempts.',
   monitoring:
     'Software that watches a system and raises an alert when something looks wrong, such as a sudden flood of failed logins.',
 };
