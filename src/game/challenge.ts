@@ -32,6 +32,19 @@ export interface Debrief {
   sections: { title: string; text: string }[];
 }
 
+/**
+ * A coarse objective shown in "I know Linux" mode instead of the step-by-step
+ * list, so expert players see the goal, not a walkthrough. Each one is marked
+ * done when the granular objective named by `doneWhen` is done, so the engine's
+ * objective tracking is unchanged.
+ */
+export interface ExpertObjective {
+  id: string;
+  title: string;
+  /** The id of the granular objective whose completion marks this one done. */
+  doneWhen: string;
+}
+
 export interface Challenge {
   id: string;
   title: string;
@@ -50,6 +63,8 @@ export interface Challenge {
   /** The colleague whose chat messages guide the player. */
   mentor: { name: string; role: string };
   objectives: Objective[];
+  /** Shown in expert mode in place of the granular objectives. Falls back to `objectives` when absent. */
+  expertObjectives?: ExpertObjective[];
   debrief?: Debrief;
   /** The code the player finds and enters with `submit`. Compared ignoring case and outer spaces. */
   answer: string;

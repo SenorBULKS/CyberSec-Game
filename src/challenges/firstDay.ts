@@ -281,6 +281,10 @@ export const firstDay: Challenge = {
       completeWhen: submittedAnswer,
     },
   ],
+  expertObjectives: [
+    { id: 'break-in', title: "Get into Marcus's account", doneWhen: 'su' },
+    { id: 'recover', title: 'Recover and submit the handover code', doneWhen: 'submit' },
+  ],
   debrief: {
     summary:
       'You got into another person\'s account without breaking anything, using only `ls`, `cat` and a password he left lying around. Real intrusions often start exactly this way.',

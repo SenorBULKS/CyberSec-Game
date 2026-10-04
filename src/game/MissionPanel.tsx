@@ -1,8 +1,27 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import type { ChallengeRun, GameMessage } from './ChallengeRun';
+import type { ExpertObjective } from './challenge';
+import type { ChallengeRun, GameMessage, ObjectiveState } from './ChallengeRun';
 import { RichText } from './RichText';
 
 export type PlayMode = 'guided' | 'expert';
+
+/**
+ * The objectives to show for the current mode. Expert mode uses the challenge's
+ * coarse `expertObjectives` (goals, not a walkthrough), each marked done from
+ * the matching granular objective; guided mode shows the granular steps.
+ */
+function displayedObjectives(
+  granular: readonly ObjectiveState[],
+  expert: ExpertObjective[] | undefined,
+  mode: PlayMode,
+): ObjectiveState[] {
+  if (mode !== 'expert' || !expert || expert.length === 0) return [...granular];
+  const done = new Map(granular.map((o) => [o.id, o.done]));
+  const list = expert.map((e) => ({ id: e.id, title: e.title, done: done.get(e.doneWhen) ?? false, current: false }));
+  const next = list.findIndex((o) => !o.done);
+  if (next >= 0) list[next].current = true;
+  return list;
+}
 
 interface Props {
   run: ChallengeRun;
@@ -22,6 +41,7 @@ export function MissionPanel({ run, mode, onModeChange, onDebrief }: Props) {
   const { challenge } = run;
   // Only the current step's messages: finishing an objective clears the earlier ones.
   const messages = snapshot.stepMessages.filter((m) => visible(m, mode));
+  const objectives = displayedObjectives(snapshot.objectives, challenge.expertObjectives, mode);
   const feedEnd = useRef<HTMLDivElement>(null);
   const currentObjective = useRef<HTMLLIElement>(null);
   const foot = useRef<HTMLElement>(null);
@@ -66,11 +86,11 @@ export function MissionPanel({ run, mode, onModeChange, onDebrief }: Props) {
         <RichText text={challenge.briefing} />
       </p>
 
-      {snapshot.objectives.length > 0 && (
+      {objectives.length > 0 && (
         <section aria-labelledby="objectives-heading">
           <h3 id="objectives-heading">Objectives</h3>
           <ol className="objectives">
-            {snapshot.objectives.map((o) => (
+            {objectives.map((o) => (
               <li
                 key={o.id}
                 ref={o.current ? currentObjective : undefined}
