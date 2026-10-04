@@ -60,18 +60,26 @@ interface GameProps {
 function Game({ request, onMenu, onRestart }: GameProps) {
   const { challenge } = request;
   const [setup] = useState(() => {
-    const run = new ChallengeRun(challenge);
     const saved = request.resume ? loadRun(challenge.id) : undefined;
+    const mode = saved?.mode ?? request.mode;
+    // The run needs the mode before replaying the log, so expert hints replay from
+    // the expert goals, not the granular steps.
+    const run = new ChallengeRun(challenge, mode);
     let motd = challenge.motd;
     let history: string[] = [];
     if (saved) {
       motd += run.restore(saved.log);
       history = saved.log.flatMap((e) => (e.kind === 'line' ? [e.text] : []));
     }
-    return { run, motd, history, mode: saved?.mode ?? request.mode };
+    return { run, motd, history, mode };
   });
   const { run } = setup;
   const [mode, setMode] = useState<PlayMode>(setup.mode);
+
+  // Keep the run's mode in step with the toggle, so hints follow the shown objectives.
+  useEffect(() => {
+    run.setMode(mode);
+  }, [run, mode]);
   const [view, setView] = useState<'terminal' | 'debrief'>(
     request.debrief && run.getSnapshot().solved ? 'debrief' : 'terminal',
   );

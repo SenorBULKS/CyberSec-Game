@@ -85,6 +85,16 @@ test('an experienced player can go straight for the leak', async ({ page }) => {
   await expect(feed(page)).not.toContainText("You're in.");
 });
 
+test('expert-mode hints point at the goal, not the hidden granular step (QA)', async ({ page }) => {
+  await page.goto('/#first-day');
+  await panel(page).getByRole('radio', { name: 'I know Linux' }).click();
+  await promptFor(page, 'newhire');
+
+  await panel(page).getByRole('button', { name: /hint/i }).click();
+  await expect(feed(page)).toContainText("Marcus's home directory is wide open");
+  await expect(feed(page)).not.toContainText('who am I');
+});
+
 test('the leaked password stands on its own, so double-clicking it copies just the password', async ({ page }) => {
   await page.goto('/#first-day');
   await promptFor(page, 'newhire');

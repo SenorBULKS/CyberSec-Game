@@ -310,8 +310,25 @@ export const firstDay: Challenge = {
     },
   ],
   expertObjectives: [
-    { id: 'break-in', title: "Get into Marcus's account", doneWhen: 'su' },
-    { id: 'recover', title: 'Recover and submit the handover code', doneWhen: 'submit' },
+    {
+      id: 'break-in',
+      title: "Get into Marcus's account",
+      doneWhen: 'su',
+      hints: [
+        "Marcus's home directory is wide open. Look at everything he left in `/home/mwalker`, hidden files included.",
+        '[[shell history]] often holds passwords typed straight into a command.',
+        'Read `/home/mwalker/.bash_history`, then `su mwalker` with the password from the `sshpass` line.',
+      ],
+    },
+    {
+      id: 'recover',
+      title: 'Recover and submit the handover code',
+      doneWhen: 'submit',
+      hints: [
+        "Now that you are Marcus, his `~/private` notes are yours to read.",
+        'Run `cat ~/private/handover.txt`, then `submit` the handover code from the top.',
+      ],
+    },
   ],
   debrief: {
     summary:
