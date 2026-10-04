@@ -99,3 +99,80 @@ describe('Shell pipelines and redirection', () => {
     expect(r.exitCode).toBe(0);
   });
 });
+
+describe('Shell command chaining', () => {
+  it('runs both sides of ; regardless of exit code', () => {
+    const r = new Shell().execute('echo one ; echo two');
+    expect(r.output).toBe('one\ntwo\n');
+  });
+
+  it('runs the right of && only when the left succeeds', () => {
+    expect(new Shell().execute('echo a && echo b').output).toBe('a\nb\n');
+    // A failing command (cd into nothing) stops &&.
+    const r = new Shell().execute('cd /nope && echo reached');
+    expect(r.output).not.toContain('reached');
+  });
+
+  it('runs the right of || only when the left fails', () => {
+    expect(new Shell().execute('echo a || echo b').output).toBe('a\n');
+    expect(new Shell().execute('cd /nope || echo recovered').output).toContain('recovered');
+  });
+
+  it('carries the last command’s exit code', () => {
+    expect(new Shell().execute('echo a ; nope').exitCode).toBe(127);
+  });
+});
+
+describe('Shell expansion', () => {
+  it('expands $HOME, $USER and ${HOME}', () => {
+    expect(new Shell().execute('echo $HOME').output).toBe('/home/newhire\n');
+    expect(new Shell().execute('echo $USER').output).toBe('newhire\n');
+    expect(new Shell().execute('echo ${HOME}/notes').output).toBe('/home/newhire/notes\n');
+  });
+
+  it('expands $? to the previous exit code', () => {
+    const shell = new Shell();
+    shell.execute('nope');
+    expect(shell.execute('echo $?').output).toBe('127\n');
+  });
+
+  it('leaves an unset variable empty', () => {
+    expect(new Shell().execute('echo [$NOPE]').output).toBe('[]\n');
+  });
+
+  it('does not expand inside single quotes', () => {
+    expect(new Shell().execute("echo '$HOME'").output).toBe('$HOME\n');
+  });
+
+  it('expands variables inside double quotes', () => {
+    expect(new Shell().execute('echo "home is $HOME"').output).toBe('home is /home/newhire\n');
+  });
+
+  it('expands a leading ~ to the home directory', () => {
+    expect(new Shell().execute('echo ~').output).toBe('/home/newhire\n');
+    expect(new Shell().execute('echo ~/work').output).toBe('/home/newhire/work\n');
+  });
+
+  it('globs * against the filesystem', () => {
+    const shell = new Shell();
+    shell.execute('echo a > one.log');
+    shell.execute('echo b > two.log');
+    shell.execute('echo c > notes.txt');
+    expect(shell.execute('echo *.log').output).toBe('one.log two.log\n');
+  });
+
+  it('a glob that matches nothing stays literal', () => {
+    expect(new Shell().execute('echo *.nothinghere').output).toBe('*.nothinghere\n');
+  });
+
+  it('* does not match names starting with a dot', () => {
+    const shell = new Shell();
+    shell.execute('echo x > visible.txt');
+    // .bashrc and .profile exist in home but * should skip them.
+    expect(shell.execute('echo *').output).toBe('visible.txt\n');
+  });
+
+  it('globs an absolute path and returns absolute matches', () => {
+    expect(new Shell().execute('echo /etc/cron.*').output).toContain('/etc/cron.d');
+  });
+});
