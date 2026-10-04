@@ -17,7 +17,22 @@ UBUNTU_CODENAME=jammy
 const ELF = '\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x03\x00>\x00\x01\x00\x00\x00';
 
 /** Programs that exist as files on disk (shell builtins like `cd` do not). */
-export const PROGRAMS = ['cat', 'clear', 'echo', 'hostname', 'id', 'ls', 'pwd', 'su', 'whoami'];
+export const PROGRAMS = [
+  'cat',
+  'clear',
+  'echo',
+  'grep',
+  'head',
+  'hostname',
+  'id',
+  'less',
+  'ls',
+  'pwd',
+  'su',
+  'tail',
+  'wc',
+  'whoami',
+];
 
 /**
  * The Ubuntu 22.04 skeleton every challenge starts from: standard top-level

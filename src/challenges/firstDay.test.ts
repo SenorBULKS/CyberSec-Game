@@ -83,3 +83,18 @@ describe('First Day on the Box', () => {
     for (const term of terms) expect(lookupTerm(term), term).toBeDefined();
   });
 });
+
+describe('First Day on the Box: the story paths exist', () => {
+  it('lets the player look at the places the notes and history mention', () => {
+    const r = new ChallengeRun(firstDay);
+    expect(run(r, 'ls /var/www/tracking')).toBe('app.py  index.html\n');
+    expect(run(r, 'ls /var/backups')).toContain('harborline-2026-10-02.tar.gz');
+    expect(run(r, 'cat /var/www/tracking/index.html')).toContain('Harborline parcel tracking');
+  });
+
+  it('keeps syslog readable only to root and adm, like a real server', () => {
+    const r = new ChallengeRun(firstDay);
+    // The file exists (not "No such file or directory") but newhire may not read it.
+    expect(run(r, 'cat /var/log/syslog')).toBe('cat: /var/log/syslog: Permission denied\n');
+  });
+});
