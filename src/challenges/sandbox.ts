@@ -17,7 +17,8 @@ function setup(): ChallengeSetup {
     groups: ['sudo'],
     homeMode: 0o755,
   });
-  machine.addUser({ name: 'newhire', uid: 1001 });
+  // On the practice box you are a full admin: a password and a place in the sudo group.
+  machine.addUser({ name: 'newhire', uid: 1001, password: 'harbor2026', groups: ['sudo'] });
 
   const fs = machine.fs;
   const me = { owner: 'newhire', group: 'newhire' };
@@ -49,7 +50,8 @@ export const sandbox: Challenge = {
   motd:
     'Welcome to the Harborline Logistics server.\n' +
     'Type \x1b[1mhelp\x1b[0m and press Enter to see what you can do.\n\n',
-  briefing: 'Free play: explore the server. Marcus\'s practice password is letmein.',
+  briefing:
+    'Free play: explore the server. You are `newhire` (password `harbor2026`) and you are in the sudo group, so you can try `sudo`. Marcus\'s practice password is letmein.',
   mentor: { name: 'Sam', role: 'Network team' },
   objectives: [],
   answer: '',

@@ -134,7 +134,7 @@ describe('whoami, hostname and id', () => {
   });
 
   it('shows user and group IDs, including extra groups', () => {
-    expect(run('id').output).toBe('uid=1001(newhire) gid=1001(newhire) groups=1001(newhire)\n');
+    expect(run('id').output).toBe('uid=1001(newhire) gid=1001(newhire) groups=1001(newhire),27(sudo)\n');
     expect(run('id mwalker').output).toBe('uid=1000(mwalker) gid=1000(mwalker) groups=1000(mwalker),27(sudo)\n');
   });
 

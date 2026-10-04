@@ -46,6 +46,74 @@ export const su: Command = {
   },
 };
 
+export const sudo: Command = {
+  name: 'sudo',
+  summary: 'Run a command as another user, usually root (sudo <command>)',
+  run(ctx) {
+    const { args, err, session } = ctx;
+    let target = 'root';
+    let i = 0;
+    for (; i < args.length && args[i].startsWith('-'); i++) {
+      if (args[i] === '-u') {
+        const who = args[++i];
+        if (who === undefined) {
+          err('sudo: option requires an argument -- u\n');
+          return 1;
+        }
+        target = who;
+      } else if (args[i] === '-k') {
+        // Forget the cached authentication, like real sudo -k.
+        session.sudoAuthed = false;
+        return 0;
+      } else {
+        err(`sudo: invalid option -- '${args[i].replace(/^-+/, '')[0] ?? ''}'\n`);
+        return 1;
+      }
+    }
+
+    const words = args.slice(i);
+    if (words.length === 0) {
+      err('usage: sudo command [arg ...]\n');
+      return 1;
+    }
+    if (!session.machine.account(target)) {
+      err(`sudo: unknown user: ${target}\n`);
+      return 1;
+    }
+
+    const who = session.credentials();
+    // root may run anything as anyone, with no password.
+    if (who.uid === 0) return session.runAs(target, words, ctx);
+
+    // Everyone else must be allowed by being in the sudo group.
+    if (!who.groups.includes('sudo')) {
+      err(`${session.user} is not in the sudoers file. This incident will be reported.\n`);
+      return 1;
+    }
+
+    const run = (io: { out: (t: string) => void; err: (t: string) => void }) =>
+      session.runAs(target, words, { input: ctx.input, out: io.out, err: io.err, clearScreen: ctx.clearScreen, askInput: ctx.askInput });
+
+    // sudo remembers a correct password for a while; if it already has, don't ask again.
+    if (session.sudoAuthed) return session.runAs(target, words, ctx);
+
+    const account = session.machine.account(session.user)!;
+    ctx.askInput({
+      prompt: `[sudo] password for ${session.user}: `,
+      secret: true,
+      onInput(password, io) {
+        if (account.password === undefined || password !== account.password) {
+          io.err('Sorry, try again.\nsudo: Authentication failure\n');
+          return 1;
+        }
+        session.sudoAuthed = true;
+        return run(io);
+      },
+    });
+    return 0;
+  },
+};
+
 export const exit: Command = {
   name: 'exit',
   summary: 'Leave a shell you started with su',

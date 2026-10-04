@@ -7,7 +7,7 @@ import { allCommands } from './commands';
 import { complete, type Completion } from './complete';
 import { expandWord, compileGlobComponent, componentHasGlob, type ExpandContext } from './expand';
 import { parseProgram, type Pipeline, type Stage, type Word } from './parse';
-import type { Command, InputRequest, Session, ShellInfo } from './types';
+import type { Command, InputRequest, RunContext, Session, ShellInfo } from './types';
 
 /** A pipeline whose words and redirect have been expanded to plain strings, ready to run. */
 interface ExpandedSegment {
@@ -72,6 +72,8 @@ export class Shell implements Session {
   oldpwd?: string;
   columns = 80;
   lastExitCode = 0;
+  /** Whether sudo has accepted the password this session (its credential cache). */
+  sudoAuthed = false;
   private commands = new Map<string, Command>();
   private outerSessions: SessionFrame[] = [];
   /** The command lines entered this session, for the `history` command. */
@@ -156,6 +158,44 @@ export class Shell implements Session {
     this.oldpwd = outer.oldpwd;
     return true;
   };
+
+  /** Runs a command as another user (for sudo) and reverts, keeping the same working directory. */
+  runAs = (user: string, words: string[], io: RunContext): number => {
+    const name = words[0];
+    const command = this.commands.get(name);
+    if (!command) {
+      io.err(`sudo: ${name}: command not found\n`);
+      return 127;
+    }
+    const previous = this.user;
+    this.user = user;
+    let exitCode: number;
+    try {
+      exitCode = command.run({
+        args: words.slice(1),
+        input: io.input,
+        out: io.out,
+        err: io.err,
+        clearScreen: io.clearScreen,
+        askInput: io.askInput,
+        session: this,
+        shell: this.makeInfo(),
+      });
+    } finally {
+      this.user = previous;
+    }
+    this.emit({ type: 'command', name, args: words.slice(1), exitCode, user, cwd: this.cwd });
+    return exitCode;
+  };
+
+  private makeInfo(): ShellInfo {
+    return {
+      commandNames: () => [...this.commands.keys()].sort(),
+      describe: (n) => this.commands.get(n)?.summary,
+      history: () => this.commandHistory,
+      clearHistory: () => (this.commandHistory.length = 0),
+    };
+  }
 
   /** How many `su` shells deep the player is (0 = their own login). */
   get depth(): number {
@@ -308,12 +348,7 @@ export class Shell implements Session {
 
   /** Runs a pipeline: each command's stdout feeds the next, or a file, or the screen. */
   private runPipeline(segments: ExpandedSegment[], interactive: boolean): ExecResult {
-    const info: ShellInfo = {
-      commandNames: () => [...this.commands.keys()].sort(),
-      describe: (n) => this.commands.get(n)?.summary,
-      history: () => this.commandHistory,
-      clearHistory: () => (this.commandHistory.length = 0),
-    };
+    const info = this.makeInfo();
     let terminal = '';
     let clearScreen = false;
     let stdin = '';

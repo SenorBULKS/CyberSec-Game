@@ -6,7 +6,7 @@ import { chmod, chown, find, rm, stat } from './files';
 import { hostname, id, whoami } from './identity';
 import { ls } from './ls';
 import { pwd } from './pwd';
-import { exit, su } from './su';
+import { exit, su, sudo } from './su';
 import { crontab, kill, ps, ss } from './system';
 import { grep, head, less, tail, wc } from './textTools';
 
@@ -32,6 +32,7 @@ export const allCommands: Command[] = [
   ss,
   stat,
   su,
+  sudo,
   tail,
   wc,
   whoami,
