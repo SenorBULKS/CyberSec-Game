@@ -25,9 +25,22 @@ export interface ChallengeSetup {
   cwd?: string;
 }
 
+/** The screen shown after a challenge is solved: what just happened, in real-world terms. */
+export interface Debrief {
+  /** A sentence or two on what the player just did. */
+  summary: string;
+  sections: { title: string; text: string }[];
+}
+
 export interface Challenge {
   id: string;
   title: string;
+  /** One line for the title screen. */
+  summary: string;
+  /** Who it is for, e.g. "Beginner". */
+  level: string;
+  /** Left off the title screen; still playable from its #anchor. */
+  hidden?: boolean;
   /** Builds a fresh copy of the world every time the challenge starts. */
   setup: () => ChallengeSetup;
   /** Printed in the terminal before the first prompt, like a login banner. */
@@ -37,6 +50,7 @@ export interface Challenge {
   /** The colleague whose chat messages guide the player. */
   mentor: { name: string; role: string };
   objectives: Objective[];
+  debrief?: Debrief;
   /** The code the player finds and enters with `submit`. Compared ignoring case and outer spaces. */
   answer: string;
 }

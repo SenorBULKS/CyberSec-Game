@@ -2,10 +2,10 @@ import type { Challenge } from '../game/challenge';
 import { practice } from './practice';
 import { sandbox } from './sandbox';
 
+/** Every challenge, in the order the title screen lists them. */
 export const challenges: Challenge[] = [practice, sandbox];
 
-/** Picks the challenge named in the page's #anchor, or the first one. */
-export function challengeFromHash(hash: string): Challenge {
-  const id = hash.replace(/^#/, '');
-  return challenges.find((c) => c.id === id) ?? challenges[0];
+/** Finds a challenge by its id, e.g. from a link's #anchor. */
+export function challengeById(id: string): Challenge | undefined {
+  return challenges.find((c) => c.id === id);
 }

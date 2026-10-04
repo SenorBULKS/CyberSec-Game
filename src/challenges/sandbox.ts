@@ -42,6 +42,9 @@ function setup(): ChallengeSetup {
 export const sandbox: Challenge = {
   id: 'sandbox',
   title: 'Sandbox',
+  summary: 'Free play on a test server, with no objectives.',
+  level: 'Any',
+  hidden: true,
   setup,
   motd:
     'Welcome to the Harborline Logistics server.\n' +

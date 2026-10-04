@@ -8,6 +8,8 @@ interface Props {
   run: ChallengeRun;
   mode: PlayMode;
   onModeChange: (mode: PlayMode) => void;
+  /** Opens the debrief; shown once the challenge is solved. */
+  onDebrief?: () => void;
 }
 
 /** In expert mode the mentor's teaching messages are hidden; hints and results stay. */
@@ -15,7 +17,7 @@ function visible(message: GameMessage, mode: PlayMode): boolean {
   return mode === 'guided' || message.kind === 'hint' || message.kind === 'solved';
 }
 
-export function MissionPanel({ run, mode, onModeChange }: Props) {
+export function MissionPanel({ run, mode, onModeChange, onDebrief }: Props) {
   const snapshot = useSyncExternalStore(run.subscribe, run.getSnapshot);
   const { challenge } = run;
   const messages = snapshot.messages.filter((m) => visible(m, mode));
@@ -75,9 +77,17 @@ export function MissionPanel({ run, mode, onModeChange }: Props) {
         <div ref={feedEnd} />
       </section>
 
+      {snapshot.solved && onDebrief && (
+        <footer className="mission-foot">
+          <button type="button" className="primary-button" onClick={onDebrief}>
+            Read the debrief
+          </button>
+        </footer>
+      )}
+
       {!snapshot.solved && snapshot.hintsTotal > 0 && (
         <footer className="mission-foot">
-          <button type="button" className="hint-button" disabled={hintsLeft === 0} onClick={() => run.nextHint()}>
+          <button type="button" className="hint-button" disabled={hintsLeft === 0} onClick={() => run.requestHint()}>
             {hintsLeft === 0
               ? 'No more hints for this step'
               : `Get a hint (${snapshot.hintsShown + 1} of ${snapshot.hintsTotal})`}

@@ -9,9 +9,11 @@ interface Props {
   shell: Shell;
   /** Banner printed before the first prompt. */
   motd: string;
+  /** Commands from a resumed game, for the Up arrow. */
+  history?: readonly string[];
 }
 
-export function TerminalView({ shell, motd }: Props) {
+export function TerminalView({ shell, motd, history }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export function TerminalView({ shell, motd }: Props) {
     term.open(host);
     fit.fit();
 
-    const controller = new TerminalController(term, shell, { motd });
+    const controller = new TerminalController(term, shell, { motd, history });
     const input = term.onData((data) => controller.handleInput(data));
     controller.start();
     term.focus();
@@ -53,7 +55,7 @@ export function TerminalView({ shell, motd }: Props) {
       input.dispose();
       term.dispose();
     };
-  }, [shell, motd]);
+  }, [shell, motd, history]);
 
   return <div className="terminal-host" ref={hostRef} data-testid="terminal" />;
 }

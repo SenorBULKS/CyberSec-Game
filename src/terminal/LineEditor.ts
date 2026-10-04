@@ -97,6 +97,18 @@ export class LineEditor {
     this.cursor += text.length;
   }
 
+  /** Puts earlier commands back into history, e.g. when a saved game is resumed. */
+  restoreHistory(lines: readonly string[]) {
+    for (const line of lines) this.remember(line);
+    this.resetLine();
+  }
+
+  private remember(line: string) {
+    // Ubuntu's default HISTCONTROL=ignoreboth: skip blank lines, lines that
+    // start with a space, and repeats of the previous command.
+    if (line.trim() !== '' && !line.startsWith(' ') && this.history.at(-1) !== line) this.history.push(line);
+  }
+
   private setLine(line: string) {
     this.buffer = line;
     this.cursor = line.length;
@@ -112,11 +124,7 @@ export class LineEditor {
     switch (key) {
       case 'enter': {
         const line = this.buffer;
-        // Ubuntu's default HISTCONTROL=ignoreboth: skip blank lines, lines that
-        // start with a space, and repeats of the previous command.
-        if (!this.secret && line.trim() !== '' && !line.startsWith(' ') && this.history.at(-1) !== line) {
-          this.history.push(line);
-        }
+        if (!this.secret) this.remember(line);
         this.resetLine();
         return { type: 'submit', line };
       }

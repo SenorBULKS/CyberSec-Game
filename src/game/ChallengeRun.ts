@@ -1,4 +1,4 @@
-import { Shell } from '../shell/Shell';
+import { Shell, type PendingInput, type TypedInput } from '../shell/Shell';
 import type { Challenge, Objective } from './challenge';
 import type { GameEvent } from './events';
 import { gameCommands } from './commands';
@@ -28,6 +28,9 @@ export interface GameMessage {
   text: string;
 }
 
+/** One thing the player did, in order: enough to rebuild the game exactly when it is resumed. */
+export type LogEntry = TypedInput | { kind: 'hint' };
+
 /**
  * One play of a challenge: builds its world, watches what the player does,
  * ticks off objectives, hands out hints and checks the final answer.
@@ -42,11 +45,15 @@ export class ChallengeRun {
   private messageListeners = new Set<(message: GameMessage) => void>();
   /** Every message so far, including any sent before the UI subscribed. */
   readonly messages: GameMessage[] = [];
+  /** Everything the player has typed or asked for, oldest first. */
+  readonly log: LogEntry[] = [];
+  private logListeners = new Set<() => void>();
 
   constructor(readonly challenge: Challenge) {
     const { machine, user, cwd } = challenge.setup();
     this.shell = new Shell({ machine, user, cwd, extraCommands: gameCommands(this) });
     this.shell.onEvent((event) => this.handle(event));
+    this.shell.onInput((input) => this.record(input));
     this.introduce(this.currentObjective());
     this.snapshot = this.buildSnapshot();
   }
@@ -66,6 +73,64 @@ export class ChallengeRun {
     this.send({ kind: 'hint', objectiveId: objective.id, text });
     this.update();
     return { text, level, of: objective.hints.length };
+  }
+
+  /** A hint asked for from the mission panel rather than with the `hint` command. */
+  requestHint() {
+    this.record({ kind: 'hint' });
+    return this.nextHint();
+  }
+
+  /**
+   * Replays a saved log to rebuild a game where the player left it. Returns
+   * what the terminal showed, so the screen can be put back too.
+   */
+  restore(log: readonly LogEntry[]): string {
+    let screen = '';
+    let pending: PendingInput | undefined;
+    const show = (output: string) => {
+      screen += output && !output.endsWith('\n') ? output + '\n' : output;
+    };
+    for (const entry of log) {
+      if (entry.kind === 'hint') {
+        this.requestHint();
+      } else if (entry.kind === 'answer') {
+        if (!pending) continue;
+        screen += pending.prompt + (pending.secret ? '' : entry.text) + '\n';
+        const result = pending.submit(entry.text);
+        pending = result.input;
+        show(result.output);
+      } else {
+        // A line typed while a prompt was waiting means the player pressed Ctrl+C on it.
+        if (pending) screen += pending.prompt + '^C\n';
+        screen += this.shell.promptAnsi() + entry.text + '\n';
+        const result = this.shell.execute(entry.text);
+        if (result.clearScreen) screen = '';
+        pending = result.input;
+        show(result.output);
+      }
+    }
+    if (pending) screen += pending.prompt + '^C\n';
+    return screen;
+  }
+
+  /** Called whenever the log grows, e.g. to save the game. */
+  onLog(listener: () => void): () => void {
+    this.logListeners.add(listener);
+    return () => this.logListeners.delete(listener);
+  }
+
+  /** Numbers for the debrief. */
+  stats(): { commands: number; hints: number } {
+    return {
+      commands: this.log.filter((e) => e.kind === 'line').length,
+      hints: this.messages.filter((m) => m.kind === 'hint').length,
+    };
+  }
+
+  private record(entry: LogEntry) {
+    this.log.push(entry);
+    for (const listener of this.logListeners) listener();
   }
 
   /** Checks an answer given with `submit`. */
