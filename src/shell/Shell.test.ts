@@ -123,6 +123,39 @@ describe('Shell command chaining', () => {
   });
 });
 
+describe('Shell history', () => {
+  it('lists the commands run this session, numbered, including itself', () => {
+    const shell = new Shell();
+    shell.execute('whoami');
+    shell.execute('ls /home');
+    const out = shell.execute('history').output;
+    expect(out).toBe('    1  whoami\n    2  ls /home\n    3  history\n');
+  });
+
+  it('history N shows only the last N, keeping their numbers', () => {
+    const shell = new Shell();
+    shell.execute('one');
+    shell.execute('two');
+    shell.execute('three');
+    expect(shell.execute('history 2').output).toBe('    3  three\n    4  history 2\n');
+  });
+
+  it('history -c clears it', () => {
+    const shell = new Shell();
+    shell.execute('whoami');
+    shell.execute('history -c');
+    expect(shell.execute('history').output).toBe('    1  history\n');
+  });
+
+  it('can be filtered through a pipe (and shows itself, as bash does)', () => {
+    const shell = new Shell();
+    shell.execute('cat /etc/passwd');
+    shell.execute('whoami');
+    // grep matches the earlier entry and the `history | grep passwd` line itself.
+    expect(shell.execute('history | grep passwd').output).toBe('    1  cat /etc/passwd\n    3  history | grep passwd\n');
+  });
+});
+
 describe('Shell expansion', () => {
   it('expands $HOME, $USER and ${HOME}', () => {
     expect(new Shell().execute('echo $HOME').output).toBe('/home/newhire\n');

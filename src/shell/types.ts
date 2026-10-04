@@ -64,6 +64,10 @@ export interface CommandContext {
 export interface ShellInfo {
   commandNames: () => string[];
   describe: (name: string) => string | undefined;
+  /** The command lines entered so far, oldest first, for the `history` command. */
+  history: () => readonly string[];
+  /** Clears the command history, for `history -c`. */
+  clearHistory: () => void;
 }
 
 export interface Command {

@@ -48,4 +48,29 @@ export const help: Command = {
   },
 };
 
-export const builtins: Command[] = [clear, echo, help];
+export const history: Command = {
+  name: 'history',
+  summary: 'Show the commands you have run this session (history -c clears it)',
+  run({ args, out, err, shell }) {
+    if (args[0] === '-c') {
+      shell.clearHistory();
+      return 0;
+    }
+    const entries = shell.history();
+    let start = 0;
+    if (args[0] !== undefined) {
+      const n = Number(args[0]);
+      if (!Number.isInteger(n) || n < 0) {
+        err(`history: ${args[0]}: numeric argument required\n`);
+        return 1;
+      }
+      start = Math.max(0, entries.length - n);
+    }
+    for (let i = start; i < entries.length; i++) {
+      out(`${String(i + 1).padStart(5)}  ${entries[i]}\n`);
+    }
+    return 0;
+  },
+};
+
+export const builtins: Command[] = [clear, echo, help, history];

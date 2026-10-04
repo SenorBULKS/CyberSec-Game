@@ -74,6 +74,8 @@ export class Shell implements Session {
   lastExitCode = 0;
   private commands = new Map<string, Command>();
   private outerSessions: SessionFrame[] = [];
+  /** The command lines entered this session, for the `history` command. */
+  private commandHistory: string[] = [];
 
   constructor(options: ShellOptions = {}) {
     this.user = options.user ?? 'newhire';
@@ -183,7 +185,10 @@ export class Shell implements Session {
 
   execute(line: string, options: ExecOptions = {}): ExecResult {
     if (options.columns) this.columns = options.columns;
-    if (line.trim() !== '') this.typed({ kind: 'line', text: line });
+    if (line.trim() !== '') {
+      this.typed({ kind: 'line', text: line });
+      this.commandHistory.push(line);
+    }
 
     const parsed = parseProgram(line);
     if (!parsed.ok) return this.finish(`bash: ${parsed.error}\n`, 2, false);
@@ -306,6 +311,8 @@ export class Shell implements Session {
     const info: ShellInfo = {
       commandNames: () => [...this.commands.keys()].sort(),
       describe: (n) => this.commands.get(n)?.summary,
+      history: () => this.commandHistory,
+      clearHistory: () => (this.commandHistory.length = 0),
     };
     let terminal = '';
     let clearScreen = false;
