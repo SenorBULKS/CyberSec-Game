@@ -10,7 +10,7 @@ describe('Tab completion', () => {
 
   it('offers every command that matches an ambiguous prefix', () => {
     expect(complete('c')).toEqual({ insert: '', candidates: ['cat', 'cd', 'chmod', 'chown', 'clear', 'crontab'] });
-    expect(complete('h')).toEqual({ insert: '', candidates: ['head', 'help', 'hostname'] });
+    expect(complete('h')).toEqual({ insert: '', candidates: ['head', 'help', 'history', 'hostname'] });
   });
 
   it('completes file names, adding / to directories', () => {
