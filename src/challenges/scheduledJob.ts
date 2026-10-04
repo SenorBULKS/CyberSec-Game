@@ -284,12 +284,21 @@ export const scheduledJob: Challenge = {
       ],
     },
     {
-      id: 'remediate',
-      title: 'Report the key and stop the job',
+      id: 'report-key',
+      title: 'Report the key’s name to Dana',
+      doneWhen: 'submit',
+      hints: [
+        'The key the job re-adds is in `/usr/local/sbin/apt-compat` and `/root/.ssh/authorized_keys`.',
+        `Report its name: submit ${KEY_NAME}`,
+      ],
+    },
+    {
+      id: 'stop-job',
+      title: 'Stop the job from running again',
       doneWhen: 'remove-job',
       hints: [
-        `Report the key’s name: submit ${KEY_NAME}`,
-        'Stop it: `sudo rm /etc/cron.d/apt-compat`. (You should also delete the planted key and fix backup.sh — covered in the debrief.)',
+        '`/etc/cron.d` is root-only, so use sudo: `sudo rm /etc/cron.d/apt-compat`.',
+        '(You should also delete the planted key and `chmod 755` backup.sh — covered in the debrief.)',
       ],
     },
   ],

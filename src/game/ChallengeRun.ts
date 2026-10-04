@@ -87,7 +87,10 @@ export class ChallengeRun {
     const expert = this.challenge.expertObjectives;
     if (this.mode === 'expert' && expert && expert.length > 0) {
       const goal = expert.find((e) => !this.done.has(e.doneWhen));
-      return goal ? { id: `expert:${goal.id}`, hints: goal.hints } : undefined;
+      if (goal) return { id: `expert:${goal.id}`, hints: goal.hints };
+      // Every expert goal maps to a finished step, yet the run isn't solved — e.g.
+      // a noSkip objective no goal covers. Fall back to the real current step so
+      // the player still gets a hint instead of "every objective is done".
     }
     const objective = this.currentObjective();
     return objective ? { id: objective.id, hints: objective.hints } : undefined;
