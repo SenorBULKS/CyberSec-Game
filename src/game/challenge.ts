@@ -77,6 +77,12 @@ export const enteredDir =
   (e) =>
     e.type === 'cd' && e.path === path;
 
+/** Completes when the player is refused access to this path or anything inside it. */
+export const deniedAt =
+  (path: string): Trigger =>
+  (e) =>
+    e.type === 'denied' && (e.path === path || e.path.startsWith(path + '/'));
+
 export const becameUser =
   (user: string): Trigger =>
   (e) =>

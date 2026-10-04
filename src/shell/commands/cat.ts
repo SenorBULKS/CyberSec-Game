@@ -1,6 +1,7 @@
 import { ERRORS } from '../../fs/FileSystem';
 import { canAccess } from '../../fs/permissions';
 import type { Command } from '../types';
+import { denied } from './denied';
 
 export const cat: Command = {
   name: 'cat',
@@ -11,9 +12,11 @@ export const cat: Command = {
       const found = session.lookup(arg);
       if (!found.ok) {
         err(`cat: ${arg}: ${ERRORS[found.code]}\n`);
+        if (found.code === 'EACCES') denied(session, arg);
         status = 1;
       } else if (!canAccess(found.node, session.credentials(), 'r')) {
         err(`cat: ${arg}: ${ERRORS.EACCES}\n`);
+        denied(session, arg);
         status = 1;
       } else if (found.node.type === 'dir') {
         err(`cat: ${arg}: ${ERRORS.EISDIR}\n`);

@@ -150,3 +150,26 @@ describe('whoami, hostname and id', () => {
     expect(passwd.startsWith('root:x:0:0:root:/root:/bin/bash\n')).toBe(true);
   });
 });
+
+describe('denied events', () => {
+  const deniedPaths = (lines: string[]) => {
+    const sh = createSandboxShell();
+    const paths: string[] = [];
+    sh.onEvent((e) => e.type === 'denied' && paths.push(e.path));
+    for (const line of lines) sh.execute(line);
+    return paths;
+  };
+
+  it('reports each refused path, resolved to an absolute path', () => {
+    expect(deniedPaths(['cd /home/mwalker', 'ls private', 'cd private', 'cat private/notes.txt'])).toEqual([
+      '/home/mwalker/private',
+      '/home/mwalker/private',
+      '/home/mwalker/private/notes.txt',
+    ]);
+    expect(deniedPaths(['cat /etc/shadow', 'ls /root'])).toEqual(['/etc/shadow', '/root']);
+  });
+
+  it('does not report missing files or allowed access', () => {
+    expect(deniedPaths(['cat nope.txt', 'ls /home/mwalker', 'cd /tmp'])).toEqual([]);
+  });
+});

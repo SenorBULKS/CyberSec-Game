@@ -3,6 +3,7 @@ import { dirname } from '../../fs/path';
 import { canAccess, modeString } from '../../fs/permissions';
 import { compareNames, formatColumns, type ColumnItem } from '../format';
 import type { Command, Session } from '../types';
+import { denied } from './denied';
 
 // Ubuntu's default LS_COLORS for the common cases.
 const COLOR = {
@@ -179,6 +180,7 @@ export const ls: Command = {
       const found = session.lookup(arg);
       if (!found.ok) {
         err(`ls: cannot access '${arg}': ${ERRORS[found.code]}\n`);
+        if (found.code === 'EACCES') denied(session, arg);
         status = 2;
       } else if (found.node.type === 'dir' && !flags.directory) {
         dirs.push({ label: arg, path: session.resolve(arg), node: found.node });
@@ -196,6 +198,7 @@ export const ls: Command = {
     for (const { label, path, node } of dirs) {
       if (!canAccess(node, who, 'r')) {
         err(`ls: cannot open directory '${label}': ${ERRORS.EACCES}\n`);
+        session.emit({ type: 'denied', path, user: session.user });
         status = 2;
         continue;
       }
