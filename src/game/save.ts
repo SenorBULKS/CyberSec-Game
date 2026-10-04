@@ -14,6 +14,19 @@ interface SaveFile {
   /** The challenge played most recently, for the title screen's Continue button. */
   last?: string;
   runs: Record<string, SavedRun>;
+  /**
+   * Challenges the player has ever finished. This is permanent: restarting or
+   * replaying a challenge clears its run but never its place here, so the
+   * campaign stays unlocked once it has been earned.
+   */
+  completed?: string[];
+}
+
+/** Everything the title screen needs: the current runs and the permanent record of what is finished. */
+export interface SaveState {
+  last?: string;
+  runs: Record<string, SavedRun>;
+  completed: Set<string>;
 }
 
 const KEY = 'cybersec-game:save';
@@ -41,18 +54,31 @@ function writeFile(file: SaveFile) {
   }
 }
 
+/** The set of finished challenges, counting both the permanent record and any run still marked solved. */
+function completedSet(file: SaveFile): Set<string> {
+  const ids = new Set(file.completed ?? []);
+  for (const [id, run] of Object.entries(file.runs)) if (run.solved) ids.add(id);
+  return ids;
+}
+
 export function loadRun(challengeId: string): SavedRun | undefined {
   return readFile().runs[challengeId];
 }
 
-export function loadAll(): { last?: string; runs: Record<string, SavedRun> } {
-  return readFile();
+export function loadAll(): SaveState {
+  const file = readFile();
+  return { last: file.last, runs: file.runs, completed: completedSet(file) };
 }
 
 export function saveRun(challengeId: string, run: Omit<SavedRun, 'updatedAt'>) {
   const file = readFile();
   file.runs[challengeId] = { ...run, updatedAt: new Date().toISOString() };
   file.last = challengeId;
+  if (run.solved) {
+    const completed = new Set(file.completed ?? []);
+    completed.add(challengeId);
+    file.completed = [...completed];
+  }
   writeFile(file);
 }
 
@@ -60,5 +86,6 @@ export function clearRun(challengeId: string) {
   const file = readFile();
   delete file.runs[challengeId];
   if (file.last === challengeId) delete file.last;
+  // Deliberately leaves `completed` untouched: finishing a challenge is permanent.
   writeFile(file);
 }
