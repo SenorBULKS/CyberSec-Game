@@ -8,6 +8,8 @@ export type GameEvent =
   | { type: 'list'; path: string; all: boolean; long: boolean; user: string }
   /** The player moved into a directory. */
   | { type: 'cd'; path: string; user: string }
+  /** The player was refused access to a path (Permission denied). */
+  | { type: 'denied'; path: string; user: string }
   /** The player became another user with su. */
   | { type: 'su'; user: string; from: string }
   /** The player entered an answer with `submit`. */

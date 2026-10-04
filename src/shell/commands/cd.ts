@@ -1,6 +1,7 @@
 import { ERRORS } from '../../fs/FileSystem';
 import { canAccess } from '../../fs/permissions';
 import type { Command } from '../types';
+import { denied } from './denied';
 
 export const cd: Command = {
   name: 'cd',
@@ -23,6 +24,7 @@ export const cd: Command = {
     const found = session.lookup(target);
     if (!found.ok) {
       err(`bash: cd: ${target}: ${ERRORS[found.code]}\n`);
+      if (found.code === 'EACCES') denied(session, target);
       return 1;
     }
     if (found.node.type !== 'dir') {
@@ -31,6 +33,7 @@ export const cd: Command = {
     }
     if (!canAccess(found.node, session.credentials(), 'x')) {
       err(`bash: cd: ${target}: ${ERRORS.EACCES}\n`);
+      denied(session, target);
       return 1;
     }
 
