@@ -52,7 +52,7 @@ describe('ChallengeRun', () => {
   it('gives hints for the current objective, one level more each time', () => {
     const r = new ChallengeRun(practice);
     expect(run(r, 'hint')).toBe('Hint 1 of 3: Which command lists files?\n');
-    expect(run(r, 'hint')).toBe('Hint 2 of 3: Type `ls` and press Enter.\n');
+    expect(run(r, 'hint')).toBe('Hint 2 of 3: Type ls and press Enter.\n');
     expect(run(r, 'hint')).toBe('Hint 3 of 3 (last hint): Run: ls\n');
     expect(run(r, 'hint')).toBe('Hint 3 of 3 (last hint): Run: ls\n');
     expect(r.getSnapshot().hintsShown).toBe(3);
@@ -69,7 +69,7 @@ describe('ChallengeRun', () => {
     r.onMessage((m) => messages.push(m.kind));
     run(r, 'ls');
     expect(updates).toBe(1);
-    expect(messages).toEqual(['outro']);
+    expect(messages).toEqual(['outro', 'intro']);
   });
 
   it('builds a fresh world for every run', () => {

@@ -14,6 +14,10 @@ export interface RunSnapshot {
   objectives: ObjectiveState[];
   /** How many hints the player has seen for the current objective. */
   hintsShown: number;
+  /** How many hints the current objective has. */
+  hintsTotal: number;
+  /** Every message so far, oldest first. */
+  messages: readonly GameMessage[];
   solved: boolean;
 }
 
@@ -36,15 +40,15 @@ export class ChallengeRun {
   private snapshot: RunSnapshot;
   private listeners = new Set<() => void>();
   private messageListeners = new Set<(message: GameMessage) => void>();
-  /** Messages sent before anyone listened, e.g. the first objective's intro. */
+  /** Every message so far, including any sent before the UI subscribed. */
   readonly messages: GameMessage[] = [];
 
   constructor(readonly challenge: Challenge) {
     const { machine, user, cwd } = challenge.setup();
     this.shell = new Shell({ machine, user, cwd, extraCommands: gameCommands(this) });
     this.shell.onEvent((event) => this.handle(event));
-    this.snapshot = this.buildSnapshot();
     this.introduce(this.currentObjective());
+    this.snapshot = this.buildSnapshot();
   }
 
   /** The first objective not yet done, or undefined when all are. */
@@ -127,6 +131,8 @@ export class ChallengeRun {
         current: o === current,
       })),
       hintsShown: current ? (this.hintLevel.get(current.id) ?? 0) : 0,
+      hintsTotal: current?.hints.length ?? 0,
+      messages: [...this.messages],
       solved: this.solved,
     };
   }

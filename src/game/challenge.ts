@@ -34,6 +34,8 @@ export interface Challenge {
   motd: string;
   /** Mission text for the panel: who you are and what you have to do. */
   briefing: string;
+  /** The colleague whose chat messages guide the player. */
+  mentor: { name: string; role: string };
   objectives: Objective[];
   /** The code the player finds and enters with `submit`. Compared ignoring case and outer spaces. */
   answer: string;

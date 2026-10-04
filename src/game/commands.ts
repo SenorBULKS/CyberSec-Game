@@ -1,5 +1,6 @@
 import type { Command } from '../shell/types';
 import type { ChallengeRun } from './ChallengeRun';
+import { toTerminal } from './markup';
 
 const DIM = '\x1b[2m';
 const YELLOW = '\x1b[33m';
@@ -19,7 +20,7 @@ export function gameCommands(run: ChallengeRun): Command[] {
         return 0;
       }
       const last = result.level === result.of ? ' (last hint)' : '';
-      out(`${YELLOW}Hint ${result.level} of ${result.of}${last}:${RESET} ${result.text}\n`);
+      out(`${YELLOW}Hint ${result.level} of ${result.of}${last}:${RESET} ${toTerminal(result.text)}\n`);
       return 0;
     },
   };

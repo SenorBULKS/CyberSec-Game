@@ -6,6 +6,10 @@
   --text: #e6edf3;
   --muted: #8b949e;
   --accent: #3fb950;
+  --hint: #d29922;
+  --hint-bg: rgba(210, 153, 34, 0.1);
+  --bubble: #1c2128;
+  --link: #79c0ff;
   --terminal-bg: #010409;
   --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, 'Liberation Mono', monospace;
   --sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -69,13 +73,8 @@ body {
 .mission-pane {
   border-left: 1px solid var(--border);
   background: var(--panel);
-  padding: 16px;
   overflow-y: auto;
-}
-
-.mission-pane h2 {
-  margin: 0 0 8px;
-  font-size: 16px;
+  min-height: 0;
 }
 
 .muted {
@@ -98,8 +97,78 @@ body {
   }
 }
 
-.mission-pane h3 {
-  margin: 20px 0 8px;
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Mission panel: header, briefing, objectives, then the mentor's chat feed,
+   with the hint button pinned to the bottom. */
+.mission {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+  padding: 16px 16px 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.mission code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(110, 118, 129, 0.25);
+}
+
+.mission-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mission-head h2 {
+  margin: 0;
+  font-size: 16px;
+  text-wrap: balance;
+}
+
+.mode-switch {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mode-switch button {
+  border: 0;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mode-switch button.active {
+  background: var(--border);
+  color: var(--text);
+}
+
+.briefing {
+  margin: 0;
+  color: var(--text);
+}
+
+.mission h3 {
+  margin: 0 0 8px;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -113,8 +182,6 @@ body {
   padding: 0;
   display: grid;
   gap: 8px;
-  font-size: 14px;
-  line-height: 1.4;
 }
 
 .objectives li {
@@ -135,19 +202,121 @@ body {
 .objectives .check {
   width: 1em;
   flex: none;
+  text-align: center;
 }
 
-.solved {
-  margin-top: 16px;
-  color: var(--accent);
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.msg {
+  padding: 10px 12px;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.msg-mentor {
+  background: var(--bubble);
+}
+
+.msg-from {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
   font-weight: 600;
+  color: var(--link);
 }
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+.msg-role {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.msg-hint {
+  background: var(--hint-bg);
+  border: 1px solid var(--hint);
+}
+
+.msg-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hint);
+}
+
+.msg-solved {
+  border: 1px solid var(--accent);
+  color: var(--text);
+}
+
+.msg-solved strong {
+  color: var(--accent);
+}
+
+.term-word {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px dotted var(--link);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: help;
+}
+
+.term-definition {
+  display: block;
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--link);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.mission-foot {
+  position: sticky;
+  bottom: 0;
+  margin: 0 -16px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.hint-button {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--hint);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--hint);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.hint-button:hover:not(:disabled) {
+  background: var(--hint-bg);
+}
+
+.hint-button:disabled {
+  border-color: var(--border);
+  color: var(--muted);
+  cursor: default;
+}
+
+.foot-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
 }
