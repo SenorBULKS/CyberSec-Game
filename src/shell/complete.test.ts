@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSandboxShell } from '../content/sandbox';
+import { createSandboxShell } from '../challenges/sandbox';
 
 const complete = (line: string, sh = createSandboxShell()) => sh.complete(line, line.length);
 

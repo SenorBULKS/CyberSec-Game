@@ -1,6 +1,7 @@
 import type { FileSystem } from '../fs/FileSystem';
 import { Machine } from '../system/Machine';
 import { resolvePath, tildify } from '../fs/path';
+import type { GameEvent } from '../game/events';
 import { allCommands } from './commands';
 import { complete, type Completion } from './complete';
 import { parseCommandLine } from './parse';
@@ -37,6 +38,8 @@ export interface ShellOptions {
   user?: string;
   cwd?: string;
   commands?: Command[];
+  /** Commands added on top of the standard set, e.g. a challenge's `hint` and `submit`. */
+  extraCommands?: Command[];
 }
 
 export interface ExecOptions {
@@ -71,8 +74,24 @@ export class Shell implements Session {
     }
     if (!this.machine.account(this.user)) throw new Error(`Shell: unknown user ${this.user}`);
     this.cwd = options.cwd ?? this.home;
-    for (const cmd of options.commands ?? allCommands) this.commands.set(cmd.name, cmd);
+    for (const cmd of [...(options.commands ?? allCommands), ...(options.extraCommands ?? [])]) {
+      this.commands.set(cmd.name, cmd);
+    }
   }
+
+  private listeners: ((event: GameEvent) => void)[] = [];
+
+  /** Subscribes to what the player does. Returns a function that unsubscribes. */
+  onEvent(listener: (event: GameEvent) => void): () => void {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== listener);
+    };
+  }
+
+  emit = (event: GameEvent) => {
+    for (const listener of this.listeners) listener(event);
+  };
 
   get fs(): FileSystem {
     return this.machine.fs;
@@ -93,12 +112,14 @@ export class Shell implements Session {
   lookup = (path: string) => this.fs.lookupAs(this.resolve(path), this.credentials());
 
   switchUser = (name: string, options: { login: boolean }) => {
+    const from = this.user;
     this.outerSessions.push({ user: this.user, cwd: this.cwd, oldpwd: this.oldpwd });
     this.user = name;
     if (options.login) {
       this.cwd = this.home;
       this.oldpwd = undefined;
     }
+    this.emit({ type: 'su', user: name, from });
   };
 
   exitUser = () => {
@@ -178,6 +199,7 @@ export class Shell implements Session {
     });
     const result = this.finish(output, exitCode, clearScreen);
     if (request) result.input = this.pending(request);
+    this.emit({ type: 'command', name, args, exitCode, user: this.user, cwd: this.cwd });
     return result;
   }
 

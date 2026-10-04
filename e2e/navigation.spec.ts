@@ -12,7 +12,7 @@ async function run(page: Page, line: string) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/#sandbox');
   await expect(screenText(page)).toContainText('newhire@harborline:~$');
 });
 

@@ -20,6 +20,7 @@ export const cat: Command = {
         status = 1;
       } else {
         out(found.node.content);
+        session.emit({ type: 'read', path: session.resolve(arg), user: session.user });
       }
     }
     return status;

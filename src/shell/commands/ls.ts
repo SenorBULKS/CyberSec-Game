@@ -229,6 +229,13 @@ export const ls: Command = {
         listing = `total ${flags.human ? humanSize(total * 1024) : total}\n` + listing;
       }
       sections.push(showHeaders ? `${label}:\n${listing}` : listing);
+      session.emit({
+        type: 'list',
+        path,
+        all: flags.all || flags.almostAll,
+        long: flags.long,
+        user: session.user,
+      });
     }
     out(sections.join('\n'));
     return status;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSandboxShell } from '../../content/sandbox';
+import { createSandboxShell } from '../../challenges/sandbox';
 
 // Expected outputs come from GNU coreutils 9.4 run as a real `newhire` user
 // on an identical tree (same owners, modes, sizes and timestamps).
