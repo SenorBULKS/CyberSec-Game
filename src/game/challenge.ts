@@ -15,6 +15,13 @@ export interface Objective {
   /** Three hints, from a gentle nudge to the exact command. */
   hints: string[];
   completeWhen: Trigger;
+  /**
+   * When true, reaching a *later* objective does NOT silently tick this one:
+   * it must be completed for real. Use it for required actions that a later
+   * step does not imply, e.g. reporting an answer or removing a planted job,
+   * so the challenge cannot be solved by skipping straight to the last step.
+   */
+  noSkip?: boolean;
 }
 
 export interface ChallengeSetup {
