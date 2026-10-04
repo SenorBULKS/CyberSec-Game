@@ -106,3 +106,57 @@ describe('triggers', () => {
     expect(anyOf(enteredDir('/x'), readFile('/a'))({ type: 'read', path: '/a', user: 'x' })).toBe(true);
   });
 });
+
+describe('ChallengeRun.restore', () => {
+  it('rebuilds the same state and screen from a saved log', () => {
+    const played = new ChallengeRun(practice);
+    played.shell.execute('ls');
+    played.requestHint();
+    played.shell.execute('hint');
+    expect(played.log).toEqual([
+      { kind: 'line', text: 'ls' },
+      { kind: 'hint' },
+      { kind: 'line', text: 'hint' },
+    ]);
+
+    const resumed = new ChallengeRun(practice);
+    const screen = strip(resumed.restore(played.log));
+    expect(resumed.getSnapshot().objectives).toEqual(played.getSnapshot().objectives);
+    expect(resumed.getSnapshot().hintsShown).toBe(2);
+    expect(resumed.messages).toEqual(played.messages);
+    expect(resumed.log).toEqual(played.log);
+    expect(screen).toBe(
+      'newhire@harborline:~$ ls\nnote.txt\n' +
+        'newhire@harborline:~$ hint\nHint 2 of 3: Use cat followed by the file name.\n',
+    );
+  });
+
+  it('records answers to prompts and hides secret ones on screen', async () => {
+    const { sandbox } = await import('../challenges/sandbox');
+    const played = new ChallengeRun(sandbox);
+    const r = played.shell.execute('su mwalker');
+    r.input!.submit('letmein');
+    played.shell.execute('whoami');
+
+    const resumed = new ChallengeRun(sandbox);
+    const screen = strip(resumed.restore(played.log));
+    expect(resumed.shell.user).toBe('mwalker');
+    expect(screen).toBe('newhire@harborline:~$ su mwalker\nPassword: \nmwalker@harborline:/home/newhire$ whoami\nmwalker\n');
+    expect(screen).not.toContain('letmein');
+  });
+
+  it('shows ^C for a prompt that was abandoned', async () => {
+    const { sandbox } = await import('../challenges/sandbox');
+    const resumed = new ChallengeRun(sandbox);
+    const screen = strip(resumed.restore([{ kind: 'line', text: 'su mwalker' }, { kind: 'line', text: 'pwd' }]));
+    expect(screen).toBe('newhire@harborline:~$ su mwalker\nPassword: ^C\nnewhire@harborline:~$ pwd\n/home/newhire\n');
+  });
+
+  it('counts commands and hints for the debrief', () => {
+    const r = new ChallengeRun(practice);
+    r.shell.execute('hint');
+    r.requestHint();
+    r.shell.execute('ls');
+    expect(r.stats()).toEqual({ commands: 2, hints: 2 });
+  });
+});

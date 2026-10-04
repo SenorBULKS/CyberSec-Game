@@ -25,6 +25,9 @@ export interface PendingInput {
   submit: (input: string) => ExecResult;
 }
 
+/** Something the player typed: a command line, or an answer to a prompt such as su's password. */
+export type TypedInput = { kind: 'line'; text: string } | { kind: 'answer'; text: string };
+
 /** Where the player was before an `su`, so `exit` can return there. */
 interface SessionFrame {
   user: string;
@@ -80,6 +83,19 @@ export class Shell implements Session {
   }
 
   private listeners: ((event: GameEvent) => void)[] = [];
+  private inputListeners: ((input: TypedInput) => void)[] = [];
+
+  /** Subscribes to everything the player types, so a game can be saved and replayed. */
+  onInput(listener: (input: TypedInput) => void): () => void {
+    this.inputListeners.push(listener);
+    return () => {
+      this.inputListeners = this.inputListeners.filter((l) => l !== listener);
+    };
+  }
+
+  private typed(input: TypedInput) {
+    for (const listener of this.inputListeners) listener(input);
+  }
 
   /** Subscribes to what the player does. Returns a function that unsubscribes. */
   onEvent(listener: (event: GameEvent) => void): () => void {
@@ -159,6 +175,7 @@ export class Shell implements Session {
 
   execute(line: string, options: ExecOptions = {}): ExecResult {
     if (options.columns) this.columns = options.columns;
+    if (line.trim() !== '') this.typed({ kind: 'line', text: line });
     let output = '';
     let clearScreen = false;
     const write = (text: string) => {
@@ -208,6 +225,7 @@ export class Shell implements Session {
       prompt: request.prompt,
       secret: request.secret,
       submit: (input) => {
+        this.typed({ kind: 'answer', text: input });
         let output = '';
         let delayMs = 0;
         const write = (text: string) => {

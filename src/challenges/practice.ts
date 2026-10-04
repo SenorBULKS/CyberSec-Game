@@ -8,6 +8,8 @@ import { Machine } from '../system/Machine';
 export const practice: Challenge = {
   id: 'practice',
   title: 'Practice Run',
+  summary: 'A two-minute warm-up: find a note on the server, read it, hand in the code.',
+  level: 'First time? Start here',
   setup() {
     const machine = new Machine('harborline');
     machine.addUser({ name: 'newhire', uid: 1001 });
@@ -47,5 +49,19 @@ export const practice: Challenge = {
       completeWhen: submittedAnswer,
     },
   ],
+  debrief: {
+    summary:
+      'You found a file, read it, and handed in what was inside. That is a big part of a system administrator\'s day: look around, read carefully, act on what you find.',
+    sections: [
+      {
+        title: 'What you used',
+        text: '`ls` lists the files in a [[directory]] and `cat` prints what is inside a file. They work the same way on every Linux [[server]] you will log in to.',
+      },
+      {
+        title: 'Why it matters for security',
+        text: 'Attackers and defenders start the same way: by looking around. Knowing what is on a machine, and who can read it, is the first step to protecting it.',
+      },
+    ],
+  },
   answer: 'PRACTICE-42',
 };

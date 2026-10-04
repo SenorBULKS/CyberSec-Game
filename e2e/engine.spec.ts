@@ -35,7 +35,7 @@ test('play the practice challenge from start to finish', async ({ page }) => {
   await expect(page.getByText('Challenge complete.', { exact: true })).toBeVisible();
 });
 
-test('an unknown #anchor falls back to the first challenge', async ({ page }) => {
+test('an unknown #anchor opens the title screen', async ({ page }) => {
   await page.goto('/#does-not-exist');
-  await expect(page.getByRole('heading', { name: 'Practice Run' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'CyberSec Game' })).toBeVisible();
 });

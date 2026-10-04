@@ -11,6 +11,8 @@ export interface TerminalLike {
 export interface ControllerOptions {
   /** Text shown before the first prompt. */
   motd?: string;
+  /** Commands typed in an earlier session, for the Up arrow. */
+  history?: readonly string[];
   /** Schedules delayed output; tests pass a synchronous version. */
   wait?: (ms: number, then: () => void) => void;
 }
@@ -36,6 +38,7 @@ export class TerminalController {
   ) {
     this.motd = options.motd ?? '';
     this.wait = options.wait ?? ((ms, then) => setTimeout(then, ms));
+    if (options.history) this.editor.restoreHistory(options.history);
   }
 
   start() {
