@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { challenges } from '../challenges';
+import { campaign, warmup } from '../challenges';
+import { campaignProgress } from '../game/campaign';
 import type { Challenge } from '../game/challenge';
 import type { PlayMode } from '../game/MissionPanel';
 import { loadAll, type SavedRun } from '../game/save';
@@ -31,7 +32,8 @@ export function TitleScreen({ onStart }: { onStart: (request: StartRequest) => v
   const [saves] = useState(loadAll);
   const lastRun = saves.last ? saves.runs[saves.last] : undefined;
   const [mode, setMode] = useState<PlayMode>(lastRun?.mode ?? 'guided');
-  const listed = challenges.filter((c) => !c.hidden);
+  const entries = campaignProgress(campaign, saves.runs);
+  const warmupSave = saves.runs[warmup.id];
 
   return (
     <main className="title-screen">
@@ -64,16 +66,28 @@ export function TitleScreen({ onStart }: { onStart: (request: StartRequest) => v
           </div>
         </section>
 
-        <section aria-labelledby="challenges-heading" className="title-section">
-          <h2 id="challenges-heading">Challenges</h2>
+        <section aria-labelledby="warmup-heading" className="title-section">
+          <h2 id="warmup-heading">New here?</h2>
           <ol className="challenge-list">
-            {listed.map((c, i) => (
+            <ChallengeCard
+              challenge={warmup}
+              saved={warmupSave}
+              onStart={(resume, debrief) => onStart({ challenge: warmup, mode, resume, debrief })}
+            />
+          </ol>
+        </section>
+
+        <section aria-labelledby="challenges-heading" className="title-section">
+          <h2 id="challenges-heading">Campaign</h2>
+          <ol className="challenge-list">
+            {entries.map((entry) => (
               <ChallengeCard
-                key={c.id}
-                number={i + 1}
-                challenge={c}
-                saved={saves.runs[c.id]}
-                onStart={(resume, debrief) => onStart({ challenge: c, mode, resume, debrief })}
+                key={entry.challenge.id}
+                number={entry.number}
+                challenge={entry.challenge}
+                saved={saves.runs[entry.challenge.id]}
+                locked={!entry.unlocked}
+                onStart={(resume, debrief) => onStart({ challenge: entry.challenge, mode, resume, debrief })}
               />
             ))}
           </ol>
@@ -88,55 +102,63 @@ function ChallengeCard({
   number,
   challenge,
   saved,
+  locked = false,
   onStart,
 }: {
-  number: number;
+  number?: number;
   challenge: Challenge;
   saved?: SavedRun;
+  locked?: boolean;
   onStart: (resume: boolean, debrief?: boolean) => void;
 }) {
   const status = saved?.solved ? 'Completed' : saved ? 'In progress' : 'Not started';
   return (
-    <li className="challenge-card" aria-label={challenge.title}>
+    <li className={`challenge-card${locked ? ' locked' : ''}`} aria-label={challenge.title}>
       <div className="challenge-meta">
-        <span className="challenge-number">{String(number).padStart(2, '0')}</span>
+        {number !== undefined && <span className="challenge-number">{String(number).padStart(2, '0')}</span>}
         <span className="challenge-level">{challenge.level}</span>
-        <span className={`challenge-status status-${status.toLowerCase().replace(' ', '-')}`}>{status}</span>
+        {locked ? (
+          <span className="challenge-status status-locked">Locked</span>
+        ) : (
+          <span className={`challenge-status status-${status.toLowerCase().replace(' ', '-')}`}>{status}</span>
+        )}
       </div>
       <h3>{challenge.title}</h3>
-      <p>{challenge.summary}</p>
-      <div className="challenge-actions">
-        {!saved && (
-          <button type="button" className="primary-button" onClick={() => onStart(false)}>
-            Start
-          </button>
-        )}
-        {saved && !saved.solved && (
-          <>
-            <button type="button" className="primary-button" onClick={() => onStart(true)}>
-              Continue
+      <p>{locked ? 'Finish the challenge before this one to unlock it.' : challenge.summary}</p>
+      {!locked && (
+        <div className="challenge-actions">
+          {!saved && (
+            <button type="button" className="primary-button" onClick={() => onStart(false)}>
+              Start
             </button>
-            <ConfirmButton
-              label="Start over"
-              question="Lose your progress?"
-              confirmLabel="Start over"
-              onConfirm={() => onStart(false)}
-            />
-          </>
-        )}
-        {saved?.solved && (
-          <>
-            {challenge.debrief && (
-              <button type="button" className="primary-button" onClick={() => onStart(true, true)}>
-                Read the debrief
+          )}
+          {saved && !saved.solved && (
+            <>
+              <button type="button" className="primary-button" onClick={() => onStart(true)}>
+                Continue
               </button>
-            )}
-            <button type="button" className="ghost-button" onClick={() => onStart(false)}>
-              Play again
-            </button>
-          </>
-        )}
-      </div>
+              <ConfirmButton
+                label="Start over"
+                question="Lose your progress?"
+                confirmLabel="Start over"
+                onConfirm={() => onStart(false)}
+              />
+            </>
+          )}
+          {saved?.solved && (
+            <>
+              {challenge.debrief && (
+                <button type="button" className="primary-button" onClick={() => onStart(true, true)}>
+                  Read the debrief
+                </button>
+              )}
+              <button type="button" className="ghost-button" onClick={() => onStart(false)}>
+                Play again
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </li>
   );
 }
