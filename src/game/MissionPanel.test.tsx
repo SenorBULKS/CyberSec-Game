@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { practice } from '../challenges/practice';
+import { firstDay } from '../challenges/firstDay';
 import { ChallengeRun } from './ChallengeRun';
 import { MissionPanel, type PlayMode } from './MissionPanel';
 import { RichText } from './RichText';
@@ -113,6 +114,34 @@ describe('MissionPanel', () => {
     expect(radios.map((r) => r.getAttribute('aria-checked'))).toEqual(['true', 'false']);
     fireEvent.click(screen.getByRole('radio', { name: 'I know Linux' }));
     expect(modes).toEqual(['expert']);
+  });
+
+  it('shows coarse expert objectives, not the walkthrough, in "I know Linux" mode (QA #3)', () => {
+    const run = new ChallengeRun(firstDay);
+    const { rerender } = render(<MissionPanel run={run} mode="guided" onModeChange={() => {}} />);
+    // Guided mode lists every granular step, including the spoilers.
+    expect(screen.getAllByRole('listitem').length).toBe(firstDay.objectives.length);
+    expect(screen.queryByText("Log in as Marcus")).toBeTruthy();
+
+    // Expert mode shows only the two goals.
+    rerender(<MissionPanel run={run} mode="expert" onModeChange={() => {}} />);
+    const items = screen.getAllByRole('listitem').map((li) => li.textContent);
+    expect(items.length).toBe(2);
+    expect(items[0]).toContain("Get into Marcus's account");
+    expect(screen.queryByText('Log in as Marcus')).toBeNull();
+    expect(screen.getAllByRole('listitem').map((li) => li.className)).toEqual(['current', '']);
+  });
+
+  it('ticks an expert objective off when its underlying step is done', () => {
+    const run = new ChallengeRun(firstDay);
+    act(() => {
+      // su asks for a password; submitting the right one makes the player mwalker.
+      const pending = run.shell.execute('su mwalker').input;
+      pending?.submit('Tidewater#22');
+    });
+    render(<MissionPanel run={run} mode="expert" onModeChange={() => {}} />);
+    // Becoming mwalker completes the first expert goal; the second is now current.
+    expect(screen.getAllByRole('listitem').map((li) => li.className)).toEqual(['done', 'current']);
   });
 
   it('removes the hint button once solved', () => {
