@@ -32,7 +32,7 @@ export function TitleScreen({ onStart }: { onStart: (request: StartRequest) => v
   const [saves] = useState(loadAll);
   const lastRun = saves.last ? saves.runs[saves.last] : undefined;
   const [mode, setMode] = useState<PlayMode>(lastRun?.mode ?? 'guided');
-  const entries = campaignProgress(campaign, saves.runs);
+  const entries = campaignProgress(campaign, saves);
   const warmupSave = saves.runs[warmup.id];
 
   return (
@@ -72,6 +72,7 @@ export function TitleScreen({ onStart }: { onStart: (request: StartRequest) => v
             <ChallengeCard
               challenge={warmup}
               saved={warmupSave}
+              completed={saves.completed.has(warmup.id)}
               onStart={(resume, debrief) => onStart({ challenge: warmup, mode, resume, debrief })}
             />
           </ol>
@@ -86,6 +87,7 @@ export function TitleScreen({ onStart }: { onStart: (request: StartRequest) => v
                 number={entry.number}
                 challenge={entry.challenge}
                 saved={saves.runs[entry.challenge.id]}
+                completed={entry.solved}
                 locked={!entry.unlocked}
                 onStart={(resume, debrief) => onStart({ challenge: entry.challenge, mode, resume, debrief })}
               />
@@ -102,16 +104,20 @@ function ChallengeCard({
   number,
   challenge,
   saved,
+  completed = false,
   locked = false,
   onStart,
 }: {
   number?: number;
   challenge: Challenge;
   saved?: SavedRun;
+  /** Finished at least once; stays true across replays. */
+  completed?: boolean;
   locked?: boolean;
   onStart: (resume: boolean, debrief?: boolean) => void;
 }) {
-  const status = saved?.solved ? 'Completed' : saved ? 'In progress' : 'Not started';
+  const inProgress = !completed && saved !== undefined;
+  const status = completed ? 'Completed' : inProgress ? 'In progress' : 'Not started';
   return (
     <li className={`challenge-card${locked ? ' locked' : ''}`} aria-label={challenge.title}>
       <div className="challenge-meta">
@@ -127,12 +133,7 @@ function ChallengeCard({
       <p>{locked ? 'Finish the challenge before this one to unlock it.' : challenge.summary}</p>
       {!locked && (
         <div className="challenge-actions">
-          {!saved && (
-            <button type="button" className="primary-button" onClick={() => onStart(false)}>
-              Start
-            </button>
-          )}
-          {saved && !saved.solved && (
+          {inProgress && (
             <>
               <button type="button" className="primary-button" onClick={() => onStart(true)}>
                 Continue
@@ -145,9 +146,9 @@ function ChallengeCard({
               />
             </>
           )}
-          {saved?.solved && (
+          {completed && (
             <>
-              {challenge.debrief && (
+              {challenge.debrief && saved?.solved && (
                 <button type="button" className="primary-button" onClick={() => onStart(true, true)}>
                   Read the debrief
                 </button>
@@ -156,6 +157,11 @@ function ChallengeCard({
                 Play again
               </button>
             </>
+          )}
+          {!completed && !inProgress && (
+            <button type="button" className="primary-button" onClick={() => onStart(false)}>
+              Start
+            </button>
           )}
         </div>
       )}

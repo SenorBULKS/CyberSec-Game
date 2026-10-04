@@ -1,13 +1,17 @@
 import { chromium } from '@playwright/test';
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
 const p = await b.newPage();
-await p.goto('http://localhost:4173/#first-day');
+await p.goto('http://localhost:4173/#practice');
 await p.waitForFunction(() => document.querySelector('.xterm-rows')?.textContent?.includes('newhire@harborline'));
 async function run(line){ await p.keyboard.type(line); await p.keyboard.press('Enter'); await p.waitForTimeout(120); }
-await run('su mwalker'); await run('Tidewater#22');
-await run('grep -n password /home/mwalker/.bash_history');
-await run('cat /home/mwalker/.bash_history | grep sshpass | wc -l');
-await run('head -n 3 /home/mwalker/.bash_history');
-const text = (await p.locator('.xterm-rows').allTextContents()).join('\n').replace(/ /g,' ');
-console.log(text.split('\n').filter(l=>l.trim()).slice(-14).join('\n'));
+await run('ls'); await run('cat note.txt'); await run('submit PRACTICE-42');
+await p.waitForTimeout(200);
+// Go to menu
+await p.getByRole('button', { name: /debrief|Menu|challenges/i }).first().click().catch(()=>{});
+await p.waitForTimeout(300);
+// Read completed badge + buttons on the Practice card
+const card = p.getByRole('listitem', { name: 'Practice Run' });
+const status = await card.locator('.challenge-status').first().textContent().catch(()=> '(no card yet)');
+const buttons = await card.getByRole('button').allTextContents().catch(()=>[]);
+console.log('STATUS:', status, '| BUTTONS:', JSON.stringify(buttons));
 await b.close();
