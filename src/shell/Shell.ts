@@ -5,8 +5,15 @@ import { dirname, resolvePath, tildify } from '../fs/path';
 import type { GameEvent } from '../game/events';
 import { allCommands } from './commands';
 import { complete, type Completion } from './complete';
-import { parsePipeline, type PipeSegment, type Redirect } from './parse';
+import { expandWord, compileGlobComponent, componentHasGlob, type ExpandContext } from './expand';
+import { parseProgram, type Pipeline, type Stage, type Word } from './parse';
 import type { Command, InputRequest, Session, ShellInfo } from './types';
+
+/** A pipeline whose words and redirect have been expanded to plain strings, ready to run. */
+interface ExpandedSegment {
+  words: string[];
+  redirect?: { file: string; append: boolean };
+}
 
 export interface ExecResult {
   /** Combined stdout and stderr, in the order written. Uses '\n' newlines. */
@@ -178,20 +185,128 @@ export class Shell implements Session {
     if (options.columns) this.columns = options.columns;
     if (line.trim() !== '') this.typed({ kind: 'line', text: line });
 
-    const parsed = parsePipeline(line);
+    const parsed = parseProgram(line);
     if (!parsed.ok) return this.finish(`bash: ${parsed.error}\n`, 2, false);
-    if (parsed.segments.length === 0) return this.finish('', this.lastExitCode, false);
-    return this.runPipeline(parsed.segments);
+    if (parsed.stages.length === 0) return this.finish('', this.lastExitCode, false);
+    return this.runProgram(parsed.stages);
+  }
+
+  /** The value of $NAME for expansion, or undefined when it is not set. */
+  private envValue(name: string): string | undefined {
+    switch (name) {
+      case 'HOME':
+        return this.home;
+      case 'USER':
+      case 'LOGNAME':
+        return this.user;
+      case 'PWD':
+        return this.cwd;
+      case 'OLDPWD':
+        return this.oldpwd;
+      case 'SHELL':
+        return '/bin/bash';
+      case 'HOSTNAME':
+        return this.host;
+      case 'UID':
+        return String(this.credentials().uid);
+      case '?':
+        return String(this.lastExitCode);
+      default:
+        return undefined;
+    }
+  }
+
+  private expandContext(): ExpandContext {
+    return {
+      env: (name) => this.envValue(name),
+      home: this.home,
+      homeFor: (name) => this.machine.account(name)?.home,
+      glob: (pattern) => this.globMatch(pattern),
+    };
+  }
+
+  /**
+   * Pathname expansion: matches a glob pattern against the filesystem, honouring
+   * read/search permissions and the rule that `*` skips names that start with a dot.
+   */
+  private globMatch(pattern: string): string[] {
+    const absolute = pattern.startsWith('/');
+    const base = absolute ? '/' : this.cwd;
+    const components = splitPatternComponents(absolute ? pattern.slice(1) : pattern);
+    const who = this.credentials();
+
+    let frontier: string[] = [base];
+    for (const component of components) {
+      const next: string[] = [];
+      if (!componentHasGlob(component)) {
+        const literal = unescapeComponent(component);
+        for (const dir of frontier) {
+          const child = joinChild(dir, literal);
+          if (this.fs.lookupAs(child, who).ok) next.push(child);
+        }
+      } else {
+        const matcher = compileGlobComponent(component);
+        for (const dir of frontier) {
+          const found = this.fs.lookupAs(dir, who);
+          if (!found.ok || found.node.type !== 'dir') continue;
+          if (!canAccess(found.node, who, 'r')) continue;
+          const names = [...found.node.children.keys()].sort();
+          for (const name of names) {
+            if (name.startsWith('.') && !matcher.matchesDotFiles) continue;
+            if (matcher.test(name)) next.push(joinChild(dir, name));
+          }
+        }
+      }
+      frontier = next;
+      if (frontier.length === 0) break;
+    }
+    // Return matches as the pattern was written: relative to cwd, or absolute.
+    const results = absolute ? frontier : frontier.map((path) => relativeTo(this.cwd, path));
+    return results.sort();
+  }
+
+  /** Runs each stage in order, respecting `;` (always), `&&` (on success) and `||` (on failure). */
+  private runProgram(stages: Stage[]): ExecResult {
+    let output = '';
+    let clearScreen = false;
+    let exitCode = this.lastExitCode;
+    for (const stage of stages) {
+      if (stage.connector === '&&' && exitCode !== 0) continue;
+      if (stage.connector === '||' && exitCode === 0) continue;
+      const segments = this.expandPipeline(stage.pipeline);
+      // Only a lone, un-redirected command in a single-stage line may pause for input.
+      const canPause = stages.length === 1 && segments.length === 1 && !segments[0].redirect;
+      const result = this.runPipeline(segments, canPause);
+      output += result.output;
+      clearScreen = clearScreen || result.clearScreen;
+      exitCode = result.exitCode;
+      if (result.input) {
+        return { ...this.finish(output, exitCode, clearScreen), input: result.input };
+      }
+    }
+    return this.finish(output, exitCode, clearScreen);
+  }
+
+  /** Expands every word (and redirect target) in a pipeline to the strings a command actually sees. */
+  private expandPipeline(pipeline: Pipeline): ExpandedSegment[] {
+    const ctx = this.expandContext();
+    return pipeline.map((segment) => {
+      const words = segment.words.flatMap((word: Word) => expandWord(word, ctx));
+      let redirect: ExpandedSegment['redirect'];
+      if (segment.redirect) {
+        const files = expandWord(segment.redirect.file, ctx);
+        redirect = { file: files[0] ?? '', append: segment.redirect.append };
+      }
+      return { words, redirect };
+    });
   }
 
   /** Runs a pipeline: each command's stdout feeds the next, or a file, or the screen. */
-  private runPipeline(segments: PipeSegment[]): ExecResult {
+  private runPipeline(segments: ExpandedSegment[], interactive: boolean): ExecResult {
     const info: ShellInfo = {
       commandNames: () => [...this.commands.keys()].sort(),
       describe: (n) => this.commands.get(n)?.summary,
     };
-    // Only a single, un-redirected command may pause for input (su's password).
-    const interactive = segments.length === 1 && !segments[0].redirect;
     let terminal = '';
     let clearScreen = false;
     let stdin = '';
@@ -200,6 +315,7 @@ export class Shell implements Session {
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i];
       const isLast = i === segments.length - 1;
+      const piped = i > 0;
       const [name, ...args] = segment.words;
 
       // `> file` with no command just creates or truncates the file.
@@ -233,7 +349,7 @@ export class Shell implements Session {
         session: this,
         shell: info,
       });
-      this.emit({ type: 'command', name, args, exitCode, user: this.user, cwd: this.cwd });
+      this.emit({ type: 'command', name, args, exitCode, user: this.user, cwd: this.cwd, piped });
 
       if (request && interactive) {
         const result = this.finish(terminal + stdout, exitCode, clearScreen);
@@ -259,7 +375,7 @@ export class Shell implements Session {
   }
 
   /** Writes a command's output to a file for `>`/`>>`, checking permissions as the kernel would. */
-  private writeRedirect(redirect: Redirect, content: string): string | null {
+  private writeRedirect(redirect: { file: string; append: boolean }, content: string): string | null {
     const target = this.resolve(redirect.file);
     const who = this.credentials();
     const existing = this.fs.lookup(target);
@@ -306,4 +422,52 @@ export class Shell implements Session {
     this.lastExitCode = exitCode;
     return { output, exitCode, clearScreen };
   }
+}
+
+/** Splits a glob pattern into path components without breaking on an escaped slash. */
+function splitPatternComponents(pattern: string): string[] {
+  const parts: string[] = [];
+  let current = '';
+  for (let i = 0; i < pattern.length; i++) {
+    if (pattern[i] === '\\' && i + 1 < pattern.length) {
+      current += pattern[i] + pattern[i + 1];
+      i++;
+      continue;
+    }
+    if (pattern[i] === '/') {
+      parts.push(current);
+      current = '';
+      continue;
+    }
+    current += pattern[i];
+  }
+  parts.push(current);
+  return parts.filter((p) => p !== '');
+}
+
+/** Removes a component's globber escaping to get the literal name it stands for. */
+function unescapeComponent(component: string): string {
+  let out = '';
+  for (let i = 0; i < component.length; i++) {
+    if (component[i] === '\\' && i + 1 < component.length) {
+      out += component[i + 1];
+      i++;
+    } else {
+      out += component[i];
+    }
+  }
+  return out;
+}
+
+/** Joins a child name onto a directory path. */
+function joinChild(dir: string, name: string): string {
+  return dir === '/' ? `/${name}` : `${dir}/${name}`;
+}
+
+/** Expresses an absolute path relative to cwd when it is at or below it, so globs echo as typed. */
+function relativeTo(cwd: string, path: string): string {
+  if (cwd === '/') return path.replace(/^\//, '') || '/';
+  if (path === cwd) return '.';
+  if (path.startsWith(cwd + '/')) return path.slice(cwd.length + 1);
+  return path;
 }

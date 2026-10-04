@@ -1,7 +1,7 @@
 /** Things the player did, reported by the shell so challenges can react. */
 export type GameEvent =
-  /** Any command line that ran (after it finished). */
-  | { type: 'command'; name: string; args: string[]; exitCode: number; user: string; cwd: string }
+  /** Any command line that ran (after it finished). `piped` is true when it read from a pipe. */
+  | { type: 'command'; name: string; args: string[]; exitCode: number; user: string; cwd: string; piped?: boolean }
   /** A file's contents were shown, e.g. by cat. */
   | { type: 'read'; path: string; user: string }
   /** A directory was listed by ls. */
