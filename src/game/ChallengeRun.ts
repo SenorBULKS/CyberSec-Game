@@ -192,8 +192,12 @@ export class ChallengeRun {
     // Doing a later step proves the earlier ones weren't needed: tick them off
     // silently. Only the step the player actually hit gets its outro, so the
     // feed never fills with notes for steps they skipped (many of which would be
-    // untrue for how they got here).
-    for (const objective of objectives.slice(0, hit)) this.done.add(objective.id);
+    // untrue for how they got here). Objectives marked noSkip are the exception:
+    // a required action (e.g. reporting the answer) is never implied by a later
+    // step, so it stays open until the player does it for real.
+    for (const objective of objectives.slice(0, hit)) {
+      if (!objective.noSkip) this.done.add(objective.id);
+    }
     const reached = objectives[hit];
     this.done.add(reached.id);
     if (reached.outro) this.send({ kind: 'outro', objectiveId: reached.id, text: reached.outro });

@@ -242,6 +242,8 @@ export const scheduledJob: Challenge = {
         'Submit just the name, nothing else.',
         `Run: submit ${KEY_NAME}`,
       ],
+      // A required report: removing the job later must not tick this off for you.
+      noSkip: true,
       completeWhen: submittedAnswer,
     },
     {
@@ -256,6 +258,8 @@ export const scheduledJob: Challenge = {
         'Plain `rm` is refused because only root may write in `/etc/cron.d`; use `sudo`.',
         'Run: sudo rm /etc/cron.d/apt-compat',
       ],
+      // A required action: it is the last step, but mark it so the intent is explicit.
+      noSkip: true,
       completeWhen: removedFile('/etc/cron.d/apt-compat'),
     },
   ],

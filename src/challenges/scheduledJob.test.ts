@@ -68,6 +68,18 @@ describe('The Scheduled Job', () => {
     expect(r.getSnapshot().solved).toBe(true);
   });
 
+  it('does not let a player win by removing the job without reporting the key (QA shortcut B)', () => {
+    const r = new ChallengeRun(scheduledJob);
+    // Removing the job first must not skip-complete "report the key": submit is noSkip.
+    sudo(r, 'sudo rm /etc/cron.d/apt-compat');
+    expect(r.shell.fs.lookup('/etc/cron.d/apt-compat').ok).toBe(false);
+    expect(r.getSnapshot().solved).toBe(false);
+    expect(current(r)).toBe('submit');
+    // Reporting the key (which the player can only know by investigating) finishes it.
+    expect(run(r, 'submit harbor-ops@fleet')).toContain('Correct! Challenge complete.');
+    expect(r.getSnapshot().solved).toBe(true);
+  });
+
   it('refuses a plain rm of the job and requires sudo', () => {
     const r = new ChallengeRun(scheduledJob);
     // /etc/cron.d is root-writable only now, so newhire cannot remove the file directly.
