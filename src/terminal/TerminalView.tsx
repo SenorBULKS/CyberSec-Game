@@ -38,7 +38,7 @@ export function TerminalView() {
     term.open(host);
     fit.fit();
 
-    const controller = new TerminalController(term, createSandboxShell(), MOTD);
+    const controller = new TerminalController(term, createSandboxShell(), { motd: MOTD });
     const input = term.onData((data) => controller.handleInput(data));
     controller.start();
     term.focus();
