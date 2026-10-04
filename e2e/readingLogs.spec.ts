@@ -30,7 +30,7 @@ test('a player works through Reading the Logs to find the break-in', async ({ pa
     ['tail /var/log/auth.log', 'The morning logins look normal'],
     ['grep "Failed password" /var/log/auth.log', 'brute-force'],
     ['grep "Failed password" /var/log/auth.log | wc -l', 'This was automated'],
-    ['grep Accepted /var/log/auth.log', 'guessed their way into Marcus'],
+    ['grep Accepted /var/log/auth.log', 'credential stuffing'],
   ];
   for (const [line, mentorSays] of steps) {
     await run(page, line);
