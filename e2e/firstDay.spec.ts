@@ -77,8 +77,6 @@ test('an experienced player can go straight for the leak', async ({ page }) => {
   await run(page, 'ls -la /home/mwalker');
   await expect(screenText(page)).toContainText('.bash_history');
   await run(page, 'grep -i pass /home/mwalker/.bash_history');
-  await expect(screenText(page)).toContainText('grep: command not found');
-  await run(page, 'cat /home/mwalker/.bash_history');
   await expect(screenText(page)).toContainText('sshpass -p Tidewater#22');
   await suToMarcus(page);
   await run(page, 'cat ~/private/handover.txt');

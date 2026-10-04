@@ -93,9 +93,9 @@ describe('Shell pipelines and redirection', () => {
     expect(r.exitCode).toBe(127);
   });
 
-  it('reports a bad command in a pipeline before piping', () => {
-    const r = new Shell().execute('echo hi | grep');
-    // grep is not added until a later chunk, so it is still "command not found".
-    expect(r.exitCode).toBe(127);
+  it('feeds a real pipeline end to end', () => {
+    const r = new Shell().execute('echo hi | grep hi');
+    expect(r.output).toBe('hi\n');
+    expect(r.exitCode).toBe(0);
   });
 });
