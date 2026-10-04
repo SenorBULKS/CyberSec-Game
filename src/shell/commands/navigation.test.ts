@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { createBaseSystem } from '../../fs/baseSystem';
+import { Machine } from '../../system/Machine';
 import { Shell } from '../Shell';
 
 /** A shell on the base system with a few practice files, checked against real bash 5.1 / coreutils 8.32. */
 function shell() {
-  const fs = createBaseSystem('harborline');
+  const machine = new Machine('harborline');
+  machine.addUser({ name: 'newhire', uid: 1001 });
+  const fs = machine.fs;
   fs.mkdir('/home/newhire/projects', { owner: 'newhire', group: 'newhire' });
   fs.writeFile('/home/newhire/notes.txt', 'Remember to check the backups.\n', { owner: 'newhire' });
   fs.writeFile('/home/newhire/projects/todo.txt', 'one\ntwo\n', { owner: 'newhire' });
   fs.writeFile('/home/newhire/.hidden', 'secret\n');
-  return new Shell({ fs });
+  return new Shell({ machine });
 }
 
 const run = (sh: Shell, line: string) => sh.execute(line, { columns: 80 });

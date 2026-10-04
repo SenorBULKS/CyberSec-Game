@@ -1,4 +1,5 @@
 import { ERRORS } from '../../fs/FileSystem';
+import { canAccess } from '../../fs/permissions';
 import type { Command } from '../types';
 
 export const cd: Command = {
@@ -17,11 +18,9 @@ export const cd: Command = {
         return 1;
       }
       target = session.oldpwd;
-      out(target + '\n');
     }
 
-    const path = session.resolve(target);
-    const found = session.fs.lookup(path);
+    const found = session.lookup(target);
     if (!found.ok) {
       err(`bash: cd: ${target}: ${ERRORS[found.code]}\n`);
       return 1;
@@ -30,9 +29,14 @@ export const cd: Command = {
       err(`bash: cd: ${target}: ${ERRORS.ENOTDIR}\n`);
       return 1;
     }
+    if (!canAccess(found.node, session.credentials(), 'x')) {
+      err(`bash: cd: ${target}: ${ERRORS.EACCES}\n`);
+      return 1;
+    }
 
+    if (args[0] === '-') out(target + '\n');
     session.oldpwd = session.cwd;
-    session.cwd = path;
+    session.cwd = session.resolve(target);
     return 0;
   },
 };

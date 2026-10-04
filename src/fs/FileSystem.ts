@@ -1,4 +1,5 @@
 import { basename, dirname, splitPath } from './path';
+import { canAccess, type Credentials } from './permissions';
 
 export interface Meta {
   owner: string;
@@ -46,6 +47,22 @@ export class FileSystem {
     let node: FsNode = this.root;
     for (const name of splitPath(path)) {
       if (node.type !== 'dir') return { ok: false, code: 'ENOTDIR' };
+      const child: FsNode | undefined = node.children.get(name);
+      if (!child) return { ok: false, code: 'ENOENT' };
+      node = child;
+    }
+    return { ok: true, node };
+  }
+
+  /**
+   * Finds a node the way the kernel does for a user: every directory passed
+   * through on the way needs execute (x) permission, or the answer is EACCES.
+   */
+  lookupAs(path: string, who: Credentials): LookupResult {
+    let node: FsNode = this.root;
+    for (const name of splitPath(path)) {
+      if (node.type !== 'dir') return { ok: false, code: 'ENOTDIR' };
+      if (!canAccess(node, who, 'x')) return { ok: false, code: 'EACCES' };
       const child: FsNode | undefined = node.children.get(name);
       if (!child) return { ok: false, code: 'ENOENT' };
       node = child;

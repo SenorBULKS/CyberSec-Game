@@ -1,4 +1,5 @@
 import { ERRORS } from '../../fs/FileSystem';
+import { canAccess } from '../../fs/permissions';
 import type { Command } from '../types';
 
 export const cat: Command = {
@@ -7,9 +8,12 @@ export const cat: Command = {
   run({ args, out, err, session }) {
     let status = 0;
     for (const arg of args) {
-      const found = session.fs.lookup(session.resolve(arg));
+      const found = session.lookup(arg);
       if (!found.ok) {
         err(`cat: ${arg}: ${ERRORS[found.code]}\n`);
+        status = 1;
+      } else if (!canAccess(found.node, session.credentials(), 'r')) {
+        err(`cat: ${arg}: ${ERRORS.EACCES}\n`);
         status = 1;
       } else if (found.node.type === 'dir') {
         err(`cat: ${arg}: ${ERRORS.EISDIR}\n`);
