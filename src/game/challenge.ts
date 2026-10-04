@@ -77,6 +77,42 @@ export const ranCommand =
   (e) =>
     e.type === 'command' && e.name === name && e.exitCode === 0 && (!user || e.user === user);
 
+/** Completes when a command ran successfully with an argument containing `text` (case-insensitive). */
+export const ranCommandWith =
+  (name: string, text: string): Trigger =>
+  (e) =>
+    e.type === 'command' &&
+    e.name === name &&
+    e.exitCode === 0 &&
+    e.args.some((a) => a.toLowerCase().includes(text.toLowerCase()));
+
+/** Completes when the player searched with grep for something containing `text`. */
+export const grepped = (text: string): Trigger => ranCommandWith('grep', text);
+
+/** Completes when a command ran at the end of a pipe (output was piped into it), e.g. `... | wc -l`. */
+export const pipedInto =
+  (name: string): Trigger =>
+  (e) =>
+    e.type === 'command' && e.name === name && e.exitCode === 0 && e.piped === true;
+
+/** Completes when the player wrote to a file, optionally one at a specific path. */
+export const wroteFile =
+  (path?: string): Trigger =>
+  (e) =>
+    e.type === 'write' && (!path || e.path === path);
+
+/** Completes when the player changed a file's permission bits, optionally to a specific mode. */
+export const changedMode =
+  (path?: string, mode?: number): Trigger =>
+  (e) =>
+    e.type === 'chmod' && (!path || e.path === path) && (mode === undefined || (e.mode & 0o7777) === mode);
+
+/** Completes when the player stopped a process, optionally a specific pid. */
+export const killedProcess =
+  (pid?: number): Trigger =>
+  (e) =>
+    e.type === 'kill' && (pid === undefined || e.pid === pid);
+
 export const readFile =
   (path: string, user?: string): Trigger =>
   (e) =>

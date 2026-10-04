@@ -30,6 +30,14 @@ export const GLOSSARY: Record<string, string> = {
   credentials: 'Anything that proves identity, such as a username and password, a key or a token.',
   'password reuse':
     'Using the same password in more than one place. When one copy leaks, every place that uses it is exposed.',
+  'log file':
+    'A file where a program records what it did, line by line with timestamps. Logins and SSH go in `/var/log/auth.log`; general system messages go in `/var/log/syslog`.',
+  pipe:
+    'The `|` symbol, which feeds one command’s output straight into the next, like `grep error log | wc -l`. It lets you build a bigger tool out of small ones.',
+  'brute-force':
+    'Breaking in by trying many passwords or keys until one works. In a log it looks like a burst of failed logins from one address in a short time.',
+  monitoring:
+    'Software that watches a system and raises an alert when something looks wrong, such as a sudden flood of failed logins.',
 };
 
 export function lookupTerm(term: string): string | undefined {

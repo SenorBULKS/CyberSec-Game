@@ -18,8 +18,8 @@ test('the terminal has focus on load and runs typed commands', async ({ page }) 
 });
 
 test('unknown commands say "command not found"', async ({ page }) => {
-  await run(page, 'sudo su');
-  await expect(screenText(page)).toContainText('sudo: command not found');
+  await run(page, 'nmap 10.0.0.1');
+  await expect(screenText(page)).toContainText('nmap: command not found');
 });
 
 test('help lists the available commands', async ({ page }) => {
