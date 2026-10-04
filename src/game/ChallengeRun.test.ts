@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { practice } from '../challenges/practice';
+import { firstDay } from '../challenges/firstDay';
 import { ChallengeRun } from './ChallengeRun';
 import { anyOf, becameUser, enteredDir, listedDir, ranCommand, readFile } from './challenge';
 import type { GameEvent } from './events';
@@ -43,6 +44,19 @@ describe('ChallengeRun', () => {
     const r = new ChallengeRun(practice);
     run(r, 'cat note.txt');
     expect(status(r)).toEqual(['x look', 'x read', ' >submit']);
+  });
+
+  it('skipping ahead sends only the reached step’s outro, not every skipped one (QA #2)', () => {
+    const r = new ChallengeRun(firstDay);
+    // The player goes straight for the history, skipping the first seven steps.
+    run(r, 'cat /home/mwalker/.bash_history');
+    const outros = r.messages.filter((m) => m.kind === 'outro').map((m) => m.objectiveId);
+    expect(outros).toEqual(['history']);
+    // The feed shows just that outro and the next step's intro, not a wall of skipped notes.
+    expect(r.getSnapshot().stepMessages.map((m) => `${m.kind}:${m.objectiveId ?? ''}`)).toEqual([
+      'outro:history',
+      'intro:su',
+    ]);
   });
 
   it('explains how to use submit', () => {

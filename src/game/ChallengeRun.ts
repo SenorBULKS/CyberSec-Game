@@ -163,12 +163,14 @@ export class ChallengeRun {
 
     // A new step starts: earlier messages are no longer what the player needs.
     this.stepStart = this.messages.length;
-    // Doing a later step proves the earlier ones weren't needed: tick them too.
-    for (const objective of objectives.slice(0, hit + 1)) {
-      if (this.done.has(objective.id)) continue;
-      this.done.add(objective.id);
-      if (objective.outro) this.send({ kind: 'outro', objectiveId: objective.id, text: objective.outro });
-    }
+    // Doing a later step proves the earlier ones weren't needed: tick them off
+    // silently. Only the step the player actually hit gets its outro, so the
+    // feed never fills with notes for steps they skipped (many of which would be
+    // untrue for how they got here).
+    for (const objective of objectives.slice(0, hit)) this.done.add(objective.id);
+    const reached = objectives[hit];
+    this.done.add(reached.id);
+    if (reached.outro) this.send({ kind: 'outro', objectiveId: reached.id, text: reached.outro });
     if (objectives.every((o) => this.done.has(o.id))) {
       this.solved = true;
       this.send({ kind: 'solved', text: this.challenge.title });
