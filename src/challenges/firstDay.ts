@@ -124,6 +124,34 @@ function setup(): ChallengeSetup {
     mtime: new Date('2026-09-25T17:58:00'),
   });
 
+  // The places Marcus's notes and history point at, so looking them up works
+  // instead of saying "No such file or directory".
+  const web = { owner: 'www-data', group: 'www-data', mtime: day('2026-09-20') };
+  fs.mkdir('/var/www/tracking', { ...web, mode: 0o755 });
+  fs.writeFile('/var/www/tracking/index.html', '<!doctype html>\n<title>Harborline parcel tracking</title>\n', web);
+  fs.writeFile(
+    '/var/www/tracking/app.py',
+    '# Harborline parcel tracking service.\n# Deploy with: git pull && sudo systemctl restart tracking\n',
+    web,
+  );
+
+  const backups = new Date('2026-10-02T02:00:00');
+  fs.mkdir('/var/backups', { owner: 'root', group: 'root', mode: 0o755, mtime: backups });
+  fs.writeFile('/var/backups/harborline-2026-10-02.tar.gz', '(nightly backup archive)\n', {
+    owner: 'root',
+    group: 'root',
+    mode: 0o600,
+    mtime: backups,
+  });
+
+  // syslog exists but, as on a real server, only root and the adm group may read it.
+  fs.writeFile(
+    '/var/log/syslog',
+    'Oct  2 02:00:01 harborline CRON[2041]: (root) CMD (/usr/local/bin/backup.sh)\n' +
+      'Oct  2 08:12:33 harborline systemd[1]: Started tracking.service.\n',
+    { owner: 'root', group: 'adm', mode: 0o640, mtime: new Date('2026-10-02T08:12:33') },
+  );
+
   return { machine, user: 'newhire' };
 }
 
