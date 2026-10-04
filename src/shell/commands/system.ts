@@ -45,6 +45,52 @@ function processField(socket: ListeningSocket): string {
   return `users:(("${socket.process}"${pid}))`;
 }
 
+export const crontab: Command = {
+  name: 'crontab',
+  summary: "List a user's scheduled jobs with crontab -l",
+  run({ args, session, out, err }: CommandContext) {
+    let list = false;
+    let target = session.user;
+    const amRoot = session.credentials().uid === 0;
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i];
+      if (arg === '-l') list = true;
+      else if (arg === '-u') {
+        const who = args[++i];
+        if (!who) {
+          err('crontab: option requires an argument -- u\n');
+          return 1;
+        }
+        if (!amRoot && who !== session.user) {
+          err('crontab: must be privileged to use -u\n');
+          return 1;
+        }
+        target = who;
+      } else if (arg === '-e' || arg === '-r') {
+        err(`crontab: ${arg} is not available in this game; crontab files live in /var/spool/cron/crontabs\n`);
+        return 1;
+      } else {
+        err(`crontab: usage error: unrecognized option '${arg}'\nUsage: crontab -l [-u user]\n`);
+        return 1;
+      }
+    }
+    if (!list) {
+      err('Usage: crontab -l [-u user]\n');
+      return 1;
+    }
+    // crontab is a privileged helper, so it can read a crontab past the spool's directory bits.
+    const path = `/var/spool/cron/crontabs/${target}`;
+    const found = session.fs.lookup(path);
+    if (!found.ok || found.node.type !== 'file') {
+      err(`no crontab for ${target}\n`);
+      return 1;
+    }
+    out(found.node.content);
+    session.emit({ type: 'read', path, user: session.user });
+    return 0;
+  },
+};
+
 export const ss: Command = {
   name: 'ss',
   summary: 'Show listening network sockets (try ss -tlnp)',

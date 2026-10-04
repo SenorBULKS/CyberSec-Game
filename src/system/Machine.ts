@@ -104,6 +104,7 @@ const SYSTEM_GROUPS: Group[] = [
   { name: 'sudo', gid: 27, members: [] },
   { name: 'www-data', gid: 33, members: [] },
   { name: 'shadow', gid: 42, members: [] },
+  { name: 'crontab', gid: 101, members: [] },
   { name: 'syslog', gid: 110, members: [] },
   { name: 'nogroup', gid: 65534, members: [] },
 ];
@@ -164,6 +165,17 @@ export class Machine {
   /** Adds a listening socket, e.g. a service a challenge starts. */
   addSocket(socket: ListeningSocket) {
     this.sockets.push({ ...socket });
+  }
+
+  /** Installs a user's personal crontab, as it would live in the cron spool. */
+  setCrontab(user: string, content: string, mtime?: Date) {
+    this.fs.mkdir('/var/spool/cron/crontabs', { owner: 'root', group: 'crontab', mode: 0o1730 });
+    this.fs.writeFile(`/var/spool/cron/crontabs/${user}`, content.endsWith('\n') ? content : content + '\n', {
+      owner: user,
+      group: 'crontab',
+      mode: 0o600,
+      mtime: mtime ?? this.clock,
+    });
   }
 
   /** The groups a user belongs to: their own group first, then any extras. */

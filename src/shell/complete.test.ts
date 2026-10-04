@@ -9,7 +9,7 @@ describe('Tab completion', () => {
   });
 
   it('offers every command that matches an ambiguous prefix', () => {
-    expect(complete('c')).toEqual({ insert: '', candidates: ['cat', 'cd', 'clear'] });
+    expect(complete('c')).toEqual({ insert: '', candidates: ['cat', 'cd', 'clear', 'crontab'] });
     expect(complete('h')).toEqual({ insert: '', candidates: ['head', 'help', 'hostname'] });
   });
 
