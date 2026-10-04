@@ -53,7 +53,7 @@ export class TerminalController {
   }
 
   private run(line: string) {
-    const result = this.shell.execute(line);
+    const result = this.shell.execute(line, { columns: this.term.cols });
     if (result.clearScreen) this.term.write(CLEAR_ALL);
     if (result.output) {
       // Like zsh, start the prompt on a fresh line even if output didn't end with one.

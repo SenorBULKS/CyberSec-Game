@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import { Shell } from '../shell/Shell';
+import { createSandboxShell } from '../content/sandbox';
 import { TerminalController } from './TerminalController';
 
 const MOTD =
@@ -38,7 +38,7 @@ export function TerminalView() {
     term.open(host);
     fit.fit();
 
-    const controller = new TerminalController(term, new Shell(), MOTD);
+    const controller = new TerminalController(term, createSandboxShell(), MOTD);
     const input = term.onData((data) => controller.handleInput(data));
     controller.start();
     term.focus();

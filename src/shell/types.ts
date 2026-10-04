@@ -1,3 +1,19 @@
+import type { FileSystem } from '../fs/FileSystem';
+
+/** The logged-in session a command runs in. Commands may change `cwd`. */
+export interface Session {
+  fs: FileSystem;
+  user: string;
+  host: string;
+  home: string;
+  cwd: string;
+  oldpwd?: string;
+  /** Width of the terminal in characters, for commands that lay out columns. */
+  columns: number;
+  /** Turns what the player typed into an absolute path. */
+  resolve: (path: string) => string;
+}
+
 export interface CommandContext {
   /** Arguments after the command name. */
   args: string[];
@@ -7,6 +23,7 @@ export interface CommandContext {
   err: (text: string) => void;
   /** Asks the terminal to clear the screen. */
   clearScreen: () => void;
+  session: Session;
   shell: ShellInfo;
 }
 
