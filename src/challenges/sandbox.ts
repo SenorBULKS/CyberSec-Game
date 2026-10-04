@@ -47,6 +47,7 @@ export const sandbox: Challenge = {
     'Welcome to the Harborline Logistics server.\n' +
     'Type \x1b[1mhelp\x1b[0m and press Enter to see what you can do.\n\n',
   briefing: 'Free play: explore the server. Marcus\'s practice password is letmein.',
+  mentor: { name: 'Sam', role: 'Network team' },
   objectives: [],
   answer: '',
 };
