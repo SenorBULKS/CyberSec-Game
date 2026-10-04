@@ -1,0 +1,19 @@
+[package]
+name = "cybersec-game"
+version = "0.1.0"
+description = "A hands-on cybersecurity learning game played in a simulated terminal"
+authors = ["SenorBULKS"]
+license = "MIT"
+repository = "https://github.com/SenorBULKS/CyberSec-Game"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "cybersec_game_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }

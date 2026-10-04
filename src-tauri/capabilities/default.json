@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The game page never calls native code, so the window gets no extra permissions.",
+  "windows": [
+    "main"
+  ],
+  "permissions": []
+}
