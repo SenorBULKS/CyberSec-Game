@@ -99,6 +99,37 @@ describe('ChallengeRun', () => {
   });
 });
 
+describe('ChallengeRun expert-mode hints (QA)', () => {
+  it('draws hints from the current expert goal, not the hidden granular step', () => {
+    const r = new ChallengeRun(firstDay, 'expert');
+    expect(r.getSnapshot().hintsTotal).toBe(3);
+    expect(run(r, 'hint')).toContain("Marcus's home directory is wide open");
+    expect(run(r, 'hint')).toContain('shell history');
+    expect(run(r, 'hint')).toContain('.bash_history');
+  });
+
+  it('moves to the next expert goal once the first is reached', () => {
+    const r = new ChallengeRun(firstDay, 'expert');
+    run(r, 'cat /home/mwalker/.bash_history');
+    r.shell.execute('su mwalker').input!.submit('Tidewater#22');
+    expect(run(r, 'hint')).toContain('~/private');
+  });
+
+  it('guided mode still hints the step-by-step objectives', () => {
+    const r = new ChallengeRun(firstDay, 'guided');
+    expect(run(r, 'hint').toLowerCase()).toContain('who am i');
+  });
+
+  it('switching to expert mode re-points the hints and refreshes the snapshot', () => {
+    const r = new ChallengeRun(firstDay); // guided by default
+    let updates = 0;
+    r.subscribe(() => updates++);
+    r.setMode('expert');
+    expect(updates).toBe(1);
+    expect(run(r, 'hint')).toContain("Marcus's home directory is wide open");
+  });
+});
+
 describe('triggers', () => {
   const cmd = (name: string, exitCode = 0, user = 'newhire'): GameEvent => ({
     type: 'command',

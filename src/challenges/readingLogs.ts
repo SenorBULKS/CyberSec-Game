@@ -226,8 +226,25 @@ export const readingLogs: Challenge = {
     },
   ],
   expertObjectives: [
-    { id: 'investigate', title: 'Find whether anyone logged in overnight, and from where', doneWhen: 'accepted' },
-    { id: 'report', title: "Report the attacker's IP address", doneWhen: 'submit' },
+    {
+      id: 'investigate',
+      title: 'Find whether anyone logged in overnight, and from where',
+      doneWhen: 'accepted',
+      hints: [
+        'The overnight logins are in `/var/log/auth.log`. You are in the `adm` group, so you may read it.',
+        "Do not scroll it, search it. A [[brute-force]] run is a burst of `Failed password` lines from one address.",
+        'Find the attempt that worked: `grep Accepted /var/log/auth.log`.',
+      ],
+    },
+    {
+      id: 'report',
+      title: "Report the attacker's IP address",
+      doneWhen: 'submit',
+      hints: [
+        "The address you want is the one on the `Accepted password` line.",
+        `Run: submit ${ATTACKER_IP}`,
+      ],
+    },
   ],
   debrief: {
     summary:

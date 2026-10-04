@@ -43,6 +43,8 @@ export interface ExpertObjective {
   title: string;
   /** The id of the granular objective whose completion marks this one done. */
   doneWhen: string;
+  /** Hints for this goal, shown in expert mode in place of the granular steps' hints. */
+  hints: string[];
 }
 
 export interface Challenge {

@@ -53,7 +53,11 @@ export class ChallengeRun {
   readonly log: LogEntry[] = [];
   private logListeners = new Set<() => void>();
 
-  constructor(readonly challenge: Challenge) {
+  /** 'expert' shows coarse goals and their hints; 'guided' shows the step-by-step objectives. */
+  private mode: 'guided' | 'expert';
+
+  constructor(readonly challenge: Challenge, mode: 'guided' | 'expert' = 'guided') {
+    this.mode = mode;
     const { machine, user, cwd } = challenge.setup();
     this.shell = new Shell({ machine, user, cwd, extraCommands: gameCommands(this) });
     this.shell.onEvent((event) => this.handle(event));
@@ -62,21 +66,43 @@ export class ChallengeRun {
     this.snapshot = this.buildSnapshot();
   }
 
+  /** Switches which objectives (and hints) the player sees; refreshes the snapshot. */
+  setMode(mode: 'guided' | 'expert') {
+    if (mode === this.mode) return;
+    this.mode = mode;
+    this.update();
+  }
+
   /** The first objective not yet done, or undefined when all are. */
   currentObjective(): Objective | undefined {
     return this.challenge.objectives.find((o) => !this.done.has(o.id));
   }
 
-  /** Returns the next hint for the current objective, revealing one more level each time. */
-  nextHint(): { text: string; level: number; of: number } | undefined {
+  /**
+   * What `hint` draws from: in expert mode the current coarse goal and its own
+   * hints, otherwise the current granular objective. Expert hint levels are kept
+   * under a separate key so switching modes does not mix the two counters.
+   */
+  private hintTarget(): { id: string; hints: string[] } | undefined {
+    const expert = this.challenge.expertObjectives;
+    if (this.mode === 'expert' && expert && expert.length > 0) {
+      const goal = expert.find((e) => !this.done.has(e.doneWhen));
+      return goal ? { id: `expert:${goal.id}`, hints: goal.hints } : undefined;
+    }
     const objective = this.currentObjective();
-    if (!objective || objective.hints.length === 0) return undefined;
-    const level = Math.min((this.hintLevel.get(objective.id) ?? 0) + 1, objective.hints.length);
-    this.hintLevel.set(objective.id, level);
-    const text = objective.hints[level - 1];
-    this.send({ kind: 'hint', objectiveId: objective.id, text });
+    return objective ? { id: objective.id, hints: objective.hints } : undefined;
+  }
+
+  /** Returns the next hint for the current objective (or expert goal), one more level each time. */
+  nextHint(): { text: string; level: number; of: number } | undefined {
+    const target = this.hintTarget();
+    if (!target || target.hints.length === 0) return undefined;
+    const level = Math.min((this.hintLevel.get(target.id) ?? 0) + 1, target.hints.length);
+    this.hintLevel.set(target.id, level);
+    const text = target.hints[level - 1];
+    this.send({ kind: 'hint', objectiveId: target.id, text });
     this.update();
-    return { text, level, of: objective.hints.length };
+    return { text, level, of: target.hints.length };
   }
 
   /** A hint asked for from the mission panel rather than with the `hint` command. */
@@ -196,6 +222,7 @@ export class ChallengeRun {
 
   private buildSnapshot(): RunSnapshot {
     const current = this.currentObjective();
+    const hintTarget = this.hintTarget();
     return {
       objectives: this.challenge.objectives.map((o) => ({
         id: o.id,
@@ -203,8 +230,8 @@ export class ChallengeRun {
         done: this.done.has(o.id),
         current: o === current,
       })),
-      hintsShown: current ? (this.hintLevel.get(current.id) ?? 0) : 0,
-      hintsTotal: current?.hints.length ?? 0,
+      hintsShown: hintTarget ? (this.hintLevel.get(hintTarget.id) ?? 0) : 0,
+      hintsTotal: hintTarget?.hints.length ?? 0,
       messages: [...this.messages],
       stepMessages: this.messages.slice(this.stepStart),
       solved: this.solved,
