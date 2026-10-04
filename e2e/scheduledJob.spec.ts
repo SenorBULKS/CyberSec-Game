@@ -15,7 +15,7 @@ async function promptFor(page: Page, user: string) {
   ).toBeVisible();
 }
 
-test('a player tracks down and removes the attacker’s scheduled job', async ({ page }) => {
+test('a player traces the persistence to a writable root script and shuts it down', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (err) => errors.push(err.message));
 
@@ -25,12 +25,10 @@ test('a player tracks down and removes the attacker’s scheduled job', async ({
 
   const steps: [string, string][] = [
     ['cat task.txt', 'on a timer'],
-    ['ls /etc/cron.d', 'ships as a cron.d file'],
+    ['ls /etc/cron.d', 'The name is camouflage'],
     ['cat /etc/cron.d/apt-compat', 'every five minutes'],
     ['cat /usr/local/sbin/apt-compat', 'persistence'],
-    ['ls -ld /etc/cron.d', 'world-writable'],
-    // The directory is world-writable, so a plain rm is enough to pull the job.
-    ['rm /etc/cron.d/apt-compat', 'Cron has nothing to run'],
+    ['cat /usr/local/bin/backup.sh', 'world-writable'],
   ];
   for (const [line, mentorSays] of steps) {
     await run(page, line);
@@ -38,7 +36,15 @@ test('a player tracks down and removes the attacker’s scheduled job', async ({
     await promptFor(page, 'newhire');
   }
 
+  // Reporting the key is correct but does not finish the challenge on its own.
   await run(page, 'submit harbor-ops@fleet');
+  await expect(screenText(page)).toContainText('you are not done yet');
+  await expect(page.getByText('Challenge complete.', { exact: true })).toHaveCount(0);
+
+  // The job still has to be removed; /etc/cron.d is root-only, so sudo is required.
+  await run(page, 'sudo rm /etc/cron.d/apt-compat');
+  await expect(screenText(page)).toContainText('[sudo] password for newhire:');
+  await run(page, 'harbor2026');
   await expect(feed(page)).toContainText('Challenge complete.');
 
   await panel(page).getByRole('button', { name: /debrief/i }).click();
@@ -46,7 +52,7 @@ test('a player tracks down and removes the attacker’s scheduled job', async ({
   expect(errors).toEqual([]);
 });
 
-test('an experienced player reads the script and reports the key straight away', async ({ page }) => {
+test('reporting the key without removing the job does not complete the challenge', async ({ page }) => {
   await page.goto('/#scheduled-job');
   await panel(page).getByRole('radio', { name: 'I know Linux' }).click();
   await promptFor(page, 'newhire');
@@ -54,5 +60,11 @@ test('an experienced player reads the script and reports the key straight away',
   await run(page, 'cat /usr/local/sbin/apt-compat');
   await expect(screenText(page)).toContainText('harbor-ops@fleet');
   await run(page, 'submit harbor-ops@fleet');
+  // Correct code, but the job is still live: no completion yet.
+  await expect(page.getByText('Challenge complete.', { exact: true })).toHaveCount(0);
+
+  await run(page, 'sudo rm /etc/cron.d/apt-compat');
+  await expect(screenText(page)).toContainText('[sudo] password for newhire:');
+  await run(page, 'harbor2026');
   await expect(feed(page)).toContainText('Challenge complete.');
 });
