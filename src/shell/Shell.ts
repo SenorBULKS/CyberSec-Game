@@ -1,6 +1,9 @@
-import { builtins } from './builtins';
+import { createBaseSystem } from '../fs/baseSystem';
+import type { FileSystem } from '../fs/FileSystem';
+import { resolvePath, tildify } from '../fs/path';
+import { allCommands } from './commands';
 import { parseCommandLine } from './parse';
-import type { Command, ShellInfo } from './types';
+import type { Command, Session, ShellInfo } from './types';
 
 export interface ExecResult {
   /** Combined stdout and stderr, in the order written. Uses '\n' newlines. */
@@ -13,7 +16,15 @@ export interface ExecResult {
 export interface ShellOptions {
   user?: string;
   host?: string;
+  home?: string;
+  cwd?: string;
+  fs?: FileSystem;
   commands?: Command[];
+}
+
+export interface ExecOptions {
+  /** Terminal width in characters. */
+  columns?: number;
 }
 
 const ANSI = {
@@ -23,29 +34,42 @@ const ANSI = {
 };
 
 /** The simulated shell: turns a typed line into output. Knows nothing about the screen. */
-export class Shell {
+export class Shell implements Session {
+  fs: FileSystem;
   user: string;
   host: string;
-  private commands = new Map<string, Command>();
+  home: string;
+  cwd: string;
+  oldpwd?: string;
+  columns = 80;
   lastExitCode = 0;
+  private commands = new Map<string, Command>();
 
   constructor(options: ShellOptions = {}) {
     this.user = options.user ?? 'newhire';
     this.host = options.host ?? 'harborline';
-    for (const cmd of options.commands ?? builtins) this.commands.set(cmd.name, cmd);
+    this.home = options.home ?? `/home/${this.user}`;
+    this.cwd = options.cwd ?? this.home;
+    this.fs = options.fs ?? createBaseSystem(this.host);
+    this.fs.mkdir(this.home, { owner: this.user, group: this.user, mode: 0o750 });
+    for (const cmd of options.commands ?? allCommands) this.commands.set(cmd.name, cmd);
   }
+
+  resolve = (path: string) => resolvePath(this.cwd, path, this.home);
 
   /** Prompt text without colors, e.g. "newhire@harborline:~$ ". */
   promptText(): string {
-    return `${this.user}@${this.host}:~$ `;
+    return `${this.user}@${this.host}:${tildify(this.cwd, this.home)}$ `;
   }
 
   /** Prompt with the same colors Ubuntu's default bash prompt uses. */
   promptAnsi(): string {
-    return `${ANSI.green}${this.user}@${this.host}${ANSI.reset}:${ANSI.blue}~${ANSI.reset}$ `;
+    const where = tildify(this.cwd, this.home);
+    return `${ANSI.green}${this.user}@${this.host}${ANSI.reset}:${ANSI.blue}${where}${ANSI.reset}$ `;
   }
 
-  execute(line: string): ExecResult {
+  execute(line: string, options: ExecOptions = {}): ExecResult {
+    if (options.columns) this.columns = options.columns;
     let output = '';
     let clearScreen = false;
     const write = (text: string) => {
@@ -77,6 +101,7 @@ export class Shell {
       clearScreen: () => {
         clearScreen = true;
       },
+      session: this,
       shell: info,
     });
     return this.finish(output, exitCode, clearScreen);
