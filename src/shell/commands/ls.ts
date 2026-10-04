@@ -1,5 +1,5 @@
 import { ERRORS, type DirNode, type FsNode } from '../../fs/FileSystem';
-import { dirname } from '../../fs/path';
+import { dirname, joinPath, splitPath } from '../../fs/path';
 import { canAccess, modeString } from '../../fs/permissions';
 import { compareNames, formatColumns, type ColumnItem } from '../format';
 import type { Command, Session } from '../types';
@@ -13,20 +13,27 @@ const COLOR = {
   reset: '\x1b[0m',
 };
 
-const SHORT_FLAGS: Record<string, keyof Flags> = {
+type ColorWhen = 'default' | 'never' | 'always' | 'auto';
+
+/** The on/off flags, i.e. every flag except `color`, which carries a value. */
+type BoolFlag = Exclude<keyof Flags, 'color'>;
+
+const SHORT_FLAGS: Record<string, BoolFlag> = {
   a: 'all',
   A: 'almostAll',
   l: 'long',
   d: 'directory',
   h: 'human',
+  R: 'recursive',
   '1': 'onePerLine',
 };
 
-const LONG_FLAGS: Record<string, keyof Flags> = {
+const LONG_FLAGS: Record<string, BoolFlag> = {
   '--all': 'all',
   '--almost-all': 'almostAll',
   '--directory': 'directory',
   '--human-readable': 'human',
+  '--recursive': 'recursive',
 };
 
 interface Flags {
@@ -35,7 +42,9 @@ interface Flags {
   long: boolean;
   directory: boolean;
   human: boolean;
+  recursive: boolean;
   onePerLine: boolean;
+  color: ColorWhen;
 }
 
 /**
@@ -48,11 +57,23 @@ interface Entry {
   type?: 'file' | 'dir';
 }
 
+/** A directory to be listed, with the label to print for it. */
+interface DirTarget {
+  label: string;
+  path: string;
+  node: DirNode;
+}
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const SIX_MONTHS_MS = (365.2425 / 2) * 24 * 60 * 60 * 1000;
 
-function colorize(name: string, node?: FsNode): string {
-  if (!node) return name;
+/** A /dev/null-style character device, shown by ls with a 'c' and a major,minor pair. */
+function charDevice(node: FsNode): boolean {
+  return node.type === 'file' && node.device === 'null';
+}
+
+function colorize(name: string, node: FsNode | undefined, useColor: boolean): string {
+  if (!useColor || !node) return name;
   if (node.type === 'dir') {
     const color = (node.mode & 0o1002) === 0o1002 ? COLOR.stickyOtherWritable : COLOR.dir;
     return color + name + COLOR.reset;
@@ -103,18 +124,21 @@ function formatDate(mtime: Date, now: Date): string {
   return `${month} ${day}  ${mtime.getFullYear()}`;
 }
 
-function formatLong(entries: Entry[], flags: Flags, now: Date): string {
+function formatLong(entries: Entry[], flags: Flags, now: Date, useColor: boolean): string {
   const rows = entries.map(({ name, node, type }) => {
     if (!node) return { mode: `${type === 'dir' ? 'd' : '-'}?????????`, links: '?', owner: '?', group: '?', size: '?', date: '           ?', name };
-    const size = byteSize(node);
+    // A character device shows a leading 'c' and a "major, minor" pair in place of a byte size.
+    const dev = charDevice(node);
+    const mode = dev ? 'c' + modeString('file', node.mode).slice(1) : modeString(node.type, node.mode);
+    const size = dev ? '1, 3' : flags.human ? humanSize(byteSize(node)) : String(byteSize(node));
     return {
-      mode: modeString(node.type, node.mode),
+      mode,
       links: String(linkCount(node)),
       owner: node.owner,
       group: node.group,
-      size: flags.human ? humanSize(size) : String(size),
+      size,
       date: formatDate(node.mtime, now),
-      name: colorize(name, node),
+      name: colorize(name, node, useColor),
     };
   });
   const width = (key: 'links' | 'owner' | 'group' | 'size') => Math.max(...rows.map((r) => r[key].length));
@@ -128,16 +152,25 @@ function formatLong(entries: Entry[], flags: Flags, now: Date): string {
     .join('');
 }
 
-function formatEntries(entries: Entry[], flags: Flags, session: Session): string {
+function formatEntries(entries: Entry[], flags: Flags, session: Session, useColor: boolean): string {
   if (entries.length === 0) return '';
-  if (flags.long) return formatLong(entries, flags, session.machine.clock);
-  const items: ColumnItem[] = entries.map((e) => ({ display: colorize(e.name, e.node), width: e.name.length }));
+  if (flags.long) return formatLong(entries, flags, session.machine.clock, useColor);
+  const items: ColumnItem[] = entries.map((e) => ({ display: colorize(e.name, e.node, useColor), width: e.name.length }));
   if (flags.onePerLine) return items.map((i) => i.display + '\n').join('');
   return formatColumns(items, session.columns);
 }
 
 function parseArgs(args: string[]): { flags: Flags; operands: string[] } | { error: string } {
-  const flags: Flags = { all: false, almostAll: false, long: false, directory: false, human: false, onePerLine: false };
+  const flags: Flags = {
+    all: false,
+    almostAll: false,
+    long: false,
+    directory: false,
+    human: false,
+    recursive: false,
+    onePerLine: false,
+    color: 'default',
+  };
   const operands: string[] = [];
   let optionsDone = false;
   for (const arg of args) {
@@ -145,6 +178,15 @@ function parseArgs(args: string[]): { flags: Flags; operands: string[] } | { err
       operands.push(arg);
     } else if (arg === '--') {
       optionsDone = true;
+    } else if (arg === '--color' || arg.startsWith('--color=')) {
+      const when = arg.includes('=') ? arg.slice('--color='.length) : 'always';
+      if (when === 'never' || when === 'no' || when === 'none') flags.color = 'never';
+      else if (when === 'always' || when === 'yes' || when === 'force') flags.color = 'always';
+      else if (when === 'auto' || when === 'tty' || when === 'if-tty') flags.color = 'auto';
+      else
+        return {
+          error: `ls: invalid argument '${when}' for '--color'\nValid arguments are:\n  - 'always', 'yes', 'force'\n  - 'never', 'no', 'none'\n  - 'auto', 'tty', 'if-tty'\nTry 'ls --help' for more information.\n`,
+        };
     } else if (arg.startsWith('--')) {
       const flag = LONG_FLAGS[arg];
       if (!flag) return { error: `ls: unrecognized option '${arg}'\nTry 'ls --help' for more information.\n` };
@@ -160,6 +202,67 @@ function parseArgs(args: string[]): { flags: Flags; operands: string[] } | { err
   return { flags, operands };
 }
 
+/** Lists one directory's contents, emits its `list` event, and reports its subdirectories. */
+function listDir(
+  target: DirTarget,
+  flags: Flags,
+  session: Session,
+  useColor: boolean,
+  err: (text: string) => void,
+): { text: string | null; subdirs: DirTarget[]; status: number } {
+  const who = session.credentials();
+  if (!canAccess(target.node, who, 'r')) {
+    err(`ls: cannot open directory '${target.label}': ${ERRORS.EACCES}\n`);
+    session.emit({ type: 'denied', path: target.path, user: session.user });
+    return { text: null, subdirs: [], status: 2 };
+  }
+  // Without x on the directory, names can be read but nothing about the files.
+  const canInspect = canAccess(target.node, who, 'x');
+
+  let names = [...target.node.children.keys()];
+  if (!flags.all && !flags.almostAll) names = names.filter((n) => !n.startsWith('.'));
+  const entries: Entry[] = names.map((n) => {
+    const child = target.node.children.get(n)!;
+    return { name: n, node: canInspect ? child : undefined, type: child.type };
+  });
+  if (flags.all) {
+    const parent = session.fs.lookup(dirname(target.path));
+    const parentNode = parent.ok ? parent.node : target.node;
+    entries.push(
+      { name: '.', node: canInspect ? target.node : undefined, type: 'dir' },
+      { name: '..', node: canInspect ? parentNode : undefined, type: 'dir' },
+    );
+  }
+  entries.sort((a, b) => compareNames(a.name, b.name));
+
+  let status = 0;
+  if (!canInspect && flags.long) {
+    for (const e of entries) err(`ls: cannot access '${target.label}/${e.name}': ${ERRORS.EACCES}\n`);
+    status = 1;
+  }
+
+  let listing = formatEntries(entries, flags, session, useColor);
+  if (flags.long) {
+    const total = entries.reduce((sum, e) => sum + (e.node ? blocks(e.node) : 0), 0);
+    listing = `total ${flags.human ? humanSize(total * 1024) : total}\n` + listing;
+  }
+  session.emit({
+    type: 'list',
+    path: target.path,
+    all: flags.all || flags.almostAll,
+    long: flags.long,
+    user: session.user,
+  });
+
+  // Real directories to recurse into (excluding the . and .. entries -a adds).
+  const subdirs: DirTarget[] = canInspect
+    ? entries
+        .filter((e) => e.type === 'dir' && e.name !== '.' && e.name !== '..' && e.node)
+        .map((e) => ({ label: `${target.label}/${e.name}`, path: joinPath([...splitPath(target.path), e.name]), node: e.node as DirNode }))
+    : [];
+  return { text: listing, subdirs, status };
+}
+
 export const ls: Command = {
   name: 'ls',
   summary: 'List files. -a shows hidden files, -l shows owners and permissions',
@@ -172,12 +275,19 @@ export const ls: Command = {
     const { flags } = parsed;
     // Like GNU ls: when the output is a pipe or a file, fall back to one name per line.
     if (!stdoutIsTerminal && !flags.long) flags.onePerLine = true;
+    const useColor =
+      flags.color === 'never'
+        ? false
+        : flags.color === 'always'
+          ? true
+          : flags.color === 'auto'
+            ? stdoutIsTerminal
+            : true; // 'default': this shell colours like Ubuntu's aliased ls.
     const operands = parsed.operands.length > 0 ? parsed.operands : ['.'];
-    const who = session.credentials();
     let status = 0;
 
     const files: Entry[] = [];
-    const dirs: { label: string; path: string; node: DirNode }[] = [];
+    const dirs: DirTarget[] = [];
     for (const arg of operands) {
       const found = session.lookup(arg);
       if (!found.ok) {
@@ -193,54 +303,18 @@ export const ls: Command = {
 
     const sections: string[] = [];
     files.sort((a, b) => compareNames(a.name, b.name));
-    if (files.length > 0) sections.push(formatEntries(files, flags, session));
+    if (files.length > 0) sections.push(formatEntries(files, flags, session, useColor));
 
     dirs.sort((a, b) => compareNames(a.label, b.label));
-    const showHeaders = operands.length > 1;
-    for (const { label, path, node } of dirs) {
-      if (!canAccess(node, who, 'r')) {
-        err(`ls: cannot open directory '${label}': ${ERRORS.EACCES}\n`);
-        session.emit({ type: 'denied', path, user: session.user });
-        status = 2;
-        continue;
-      }
-      // Without x on the directory, names can be read but nothing about the files.
-      const canInspect = canAccess(node, who, 'x');
-
-      let names = [...node.children.keys()];
-      if (!flags.all && !flags.almostAll) names = names.filter((n) => !n.startsWith('.'));
-      const entries: Entry[] = names.map((n) => {
-        const child = node.children.get(n)!;
-        return { name: n, node: canInspect ? child : undefined, type: child.type };
-      });
-      if (flags.all) {
-        const parent = session.fs.lookup(dirname(path));
-        const parentNode = parent.ok ? parent.node : node;
-        entries.push(
-          { name: '.', node: canInspect ? node : undefined, type: 'dir' },
-          { name: '..', node: canInspect ? parentNode : undefined, type: 'dir' },
-        );
-      }
-      entries.sort((a, b) => compareNames(a.name, b.name));
-
-      if (!canInspect && flags.long) {
-        for (const e of entries) err(`ls: cannot access '${label}/${e.name}': ${ERRORS.EACCES}\n`);
-        status = 1;
-      }
-
-      let listing = formatEntries(entries, flags, session);
-      if (flags.long) {
-        const total = entries.reduce((sum, e) => sum + (e.node ? blocks(e.node) : 0), 0);
-        listing = `total ${flags.human ? humanSize(total * 1024) : total}\n` + listing;
-      }
-      sections.push(showHeaders ? `${label}:\n${listing}` : listing);
-      session.emit({
-        type: 'list',
-        path,
-        all: flags.all || flags.almostAll,
-        long: flags.long,
-        user: session.user,
-      });
+    // With -R, every directory gets a header and its subdirectories follow it.
+    const showHeaders = operands.length > 1 || flags.recursive;
+    const worklist = [...dirs];
+    while (worklist.length > 0) {
+      const target = worklist.shift()!;
+      const result = listDir(target, flags, session, useColor, err);
+      if (result.status) status = Math.max(status, result.status);
+      if (result.text !== null) sections.push(showHeaders ? `${target.label}:\n${result.text}` : result.text);
+      if (flags.recursive) worklist.unshift(...result.subdirs);
     }
     out(sections.join('\n'));
     return status;

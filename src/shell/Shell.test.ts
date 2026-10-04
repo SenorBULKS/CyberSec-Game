@@ -195,6 +195,14 @@ describe('Shell command chaining', () => {
   it('carries the last command’s exit code', () => {
     expect(new Shell().execute('echo a ; nope').exitCode).toBe(127);
   });
+
+  it('has true and false, which succeed and fail silently', () => {
+    expect(new Shell().execute('true').output).toBe('');
+    expect(new Shell().execute('true').exitCode).toBe(0);
+    expect(new Shell().execute('false').exitCode).toBe(1);
+    // The classic idiom: false falls through && to its ||.
+    expect(new Shell().execute('false && echo no || echo yes').output).toBe('yes\n');
+  });
 });
 
 describe('Shell history', () => {
