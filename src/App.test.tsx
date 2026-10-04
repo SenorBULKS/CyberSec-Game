@@ -91,6 +91,29 @@ describe('saving', () => {
     expect(screen.getByTestId('terminal').textContent).not.toContain('note.txt');
   });
 
+  it('lets a replay of a finished challenge be continued, not silently wiped', () => {
+    const first = render(<App />);
+    fireEvent.click(within(card('Practice Run')).getByRole('button', { name: 'Start' }));
+    type('cat note.txt');
+    type('submit PRACTICE-42');
+    fireEvent.click(button('Read the debrief'));
+    fireEvent.click(button('Back to the challenges'));
+    expect(within(card('Practice Run')).getByText('Completed')).toBeTruthy();
+
+    // Replay it and make some progress.
+    fireEvent.click(within(card('Practice Run')).getByRole('button', { name: 'Play again' }));
+    type('ls');
+    fireEvent.click(button('Menu'));
+
+    // The card still reads Completed, but the in-progress replay must offer
+    // Continue (regression: it only showed Play again, which wiped the replay).
+    const replay = card('Practice Run');
+    expect(within(replay).getByText('Completed')).toBeTruthy();
+    fireEvent.click(within(replay).getByRole('button', { name: 'Continue' }));
+    expect(screen.getByTestId('terminal').textContent).toContain('note.txt');
+    first.unmount();
+  });
+
   it('plays on without saving when storage is blocked', () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('blocked');

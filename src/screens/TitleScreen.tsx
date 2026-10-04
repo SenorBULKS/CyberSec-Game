@@ -116,8 +116,12 @@ function ChallengeCard({
   locked?: boolean;
   onStart: (resume: boolean, debrief?: boolean) => void;
 }) {
-  const inProgress = !completed && saved !== undefined;
-  const status = completed ? 'Completed' : inProgress ? 'In progress' : 'Not started';
+  // A run is "in progress" whenever there is an unsolved save, even on a replay
+  // of an already-completed challenge. `completed` only drives the badge and
+  // unlocking; the action buttons follow the current run so a replay is never
+  // silently wiped.
+  const runInProgress = saved !== undefined && !saved.solved;
+  const status = completed ? 'Completed' : runInProgress ? 'In progress' : 'Not started';
   return (
     <li className={`challenge-card${locked ? ' locked' : ''}`} aria-label={challenge.title}>
       <div className="challenge-meta">
@@ -133,20 +137,19 @@ function ChallengeCard({
       <p>{locked ? 'Finish the challenge before this one to unlock it.' : challenge.summary}</p>
       {!locked && (
         <div className="challenge-actions">
-          {inProgress && (
+          {runInProgress ? (
             <>
               <button type="button" className="primary-button" onClick={() => onStart(true)}>
                 Continue
               </button>
               <ConfirmButton
                 label="Start over"
-                question="Lose your progress?"
+                question={completed ? 'Discard this attempt?' : 'Lose your progress?'}
                 confirmLabel="Start over"
                 onConfirm={() => onStart(false)}
               />
             </>
-          )}
-          {completed && (
+          ) : completed ? (
             <>
               {challenge.debrief && saved?.solved && (
                 <button type="button" className="primary-button" onClick={() => onStart(true, true)}>
@@ -157,8 +160,7 @@ function ChallengeCard({
                 Play again
               </button>
             </>
-          )}
-          {!completed && !inProgress && (
+          ) : (
             <button type="button" className="primary-button" onClick={() => onStart(false)}>
               Start
             </button>
