@@ -92,7 +92,14 @@ export const sudo: Command = {
     }
 
     const run = (io: { out: (t: string) => void; err: (t: string) => void }) =>
-      session.runAs(target, words, { input: ctx.input, out: io.out, err: io.err, clearScreen: ctx.clearScreen, askInput: ctx.askInput });
+      session.runAs(target, words, {
+        input: ctx.input,
+        out: io.out,
+        err: io.err,
+        clearScreen: ctx.clearScreen,
+        askInput: ctx.askInput,
+        stdoutIsTerminal: ctx.stdoutIsTerminal,
+      });
 
     // sudo remembers a correct password for a while; if it already has, don't ask again.
     if (session.sudoAuthed) return session.runAs(target, words, ctx);

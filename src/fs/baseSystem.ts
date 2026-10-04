@@ -75,6 +75,8 @@ export function createBaseSystem(hostname: string): FileSystem {
   fs.mkdir('/usr/share');
   fs.mkdir('/var/log', { mode: 0o775, group: 'syslog' });
   fs.mkdir('/var/tmp', { mode: 0o1777 });
+  // The bit bucket: writes are discarded, reads give nothing. World read/write.
+  fs.writeFile('/dev/null', '', { mode: 0o666, device: 'null' });
 
   for (const name of PROGRAMS) fs.writeFile(`/usr/bin/${name}`, ELF, { mode: 0o755 });
   // su and sudo run as root whoever starts them (setuid), so they can check passwords.

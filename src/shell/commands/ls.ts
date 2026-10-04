@@ -163,13 +163,15 @@ function parseArgs(args: string[]): { flags: Flags; operands: string[] } | { err
 export const ls: Command = {
   name: 'ls',
   summary: 'List files. -a shows hidden files, -l shows owners and permissions',
-  run({ args, out, err, session }) {
+  run({ args, out, err, session, stdoutIsTerminal }) {
     const parsed = parseArgs(args);
     if ('error' in parsed) {
       err(parsed.error);
       return 2;
     }
     const { flags } = parsed;
+    // Like GNU ls: when the output is a pipe or a file, fall back to one name per line.
+    if (!stdoutIsTerminal && !flags.long) flags.onePerLine = true;
     const operands = parsed.operands.length > 0 ? parsed.operands : ['.'];
     const who = session.credentials();
     let status = 0;

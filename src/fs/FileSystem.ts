@@ -12,6 +12,8 @@ export interface Meta {
 export interface FileNode extends Meta {
   type: 'file';
   content: string;
+  /** A character device that discards writes and reads empty, for /dev/null. */
+  device?: 'null';
 }
 
 export interface DirNode extends Meta {
@@ -86,7 +88,7 @@ export class FileSystem {
   }
 
   /** Creates or replaces a file; the parent directory must exist. */
-  writeFile(path: string, content: string, meta: Partial<Meta> = {}): FileNode {
+  writeFile(path: string, content: string, meta: Partial<Meta> & { device?: FileNode['device'] } = {}): FileNode {
     const parent = this.lookup(dirname(path));
     if (!parent.ok || parent.node.type !== 'dir') throw new Error(`writeFile: ${path}: no parent directory`);
     const file: FileNode = { type: 'file', content, mode: 0o644, ...DEFAULT_META, ...meta };

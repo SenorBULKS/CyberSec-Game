@@ -9,11 +9,25 @@ import { expandWord, compileGlobComponent, componentHasGlob, type ExpandContext 
 import { parseProgram, type Pipeline, type Stage, type Word } from './parse';
 import type { Command, InputRequest, RunContext, Session, ShellInfo } from './types';
 
-/** A pipeline whose words and redirect have been expanded to plain strings, ready to run. */
+/** A redirection whose file name has been expanded to a plain string. */
+type ExpandedRedirect =
+  | { kind: 'out'; fd: 1 | 2; file: string; append: boolean }
+  | { kind: 'in'; file: string }
+  | { kind: 'both'; file: string; append: boolean }
+  | { kind: 'dup'; fd: 1 | 2; toFd: 1 | 2 };
+
+/** A pipeline whose words and redirects have been expanded to plain strings, ready to run. */
 interface ExpandedSegment {
   words: string[];
-  redirect?: { file: string; append: boolean };
+  redirects: ExpandedRedirect[];
 }
+
+/** Where a stream ends up once a segment's redirections are applied. */
+type Dest =
+  | { to: 'terminal' }
+  | { to: 'pipe' }
+  | { to: 'file'; file: string; append: boolean }
+  | { to: 'discard' };
 
 export interface ExecResult {
   /** Combined stdout and stderr, in the order written. Uses '\n' newlines. */
@@ -178,6 +192,7 @@ export class Shell implements Session {
         err: io.err,
         clearScreen: io.clearScreen,
         askInput: io.askInput,
+        stdoutIsTerminal: io.stdoutIsTerminal,
         session: this,
         shell: this.makeInfo(),
       });
@@ -320,7 +335,7 @@ export class Shell implements Session {
       if (stage.connector === '||' && exitCode === 0) continue;
       const segments = this.expandPipeline(stage.pipeline);
       // Only a lone, un-redirected command in a single-stage line may pause for input.
-      const canPause = stages.length === 1 && segments.length === 1 && !segments[0].redirect;
+      const canPause = stages.length === 1 && segments.length === 1 && segments[0].redirects.length === 0;
       const result = this.runPipeline(segments, canPause);
       output += result.output;
       clearScreen = clearScreen || result.clearScreen;
@@ -337,16 +352,18 @@ export class Shell implements Session {
     const ctx = this.expandContext();
     return pipeline.map((segment) => {
       const words = segment.words.flatMap((word: Word) => expandWord(word, ctx));
-      let redirect: ExpandedSegment['redirect'];
-      if (segment.redirect) {
-        const files = expandWord(segment.redirect.file, ctx);
-        redirect = { file: files[0] ?? '', append: segment.redirect.append };
-      }
-      return { words, redirect };
+      const redirects: ExpandedRedirect[] = segment.redirects.map((r) => {
+        if (r.kind === 'dup') return r;
+        const file = expandWord(r.file, ctx)[0] ?? '';
+        if (r.kind === 'out') return { kind: 'out', fd: r.fd, file, append: r.append };
+        if (r.kind === 'both') return { kind: 'both', file, append: r.append };
+        return { kind: 'in', file };
+      });
+      return { words, redirects };
     });
   }
 
-  /** Runs a pipeline: each command's stdout feeds the next, or a file, or the screen. */
+  /** Runs a pipeline: each command's stdout feeds the next, a file, or the screen. */
   private runPipeline(segments: ExpandedSegment[], interactive: boolean): ExecResult {
     const info = this.makeInfo();
     let terminal = '';
@@ -358,62 +375,111 @@ export class Shell implements Session {
       const segment = segments[i];
       const isLast = i === segments.length - 1;
       const piped = i > 0;
-      const [name, ...args] = segment.words;
 
-      // `> file` with no command just creates or truncates the file.
-      if (name === undefined) {
-        if (segment.redirect) {
-          const error = this.writeRedirect(segment.redirect, '');
-          exitCode = error ? 1 : 0;
-          if (error) terminal += error;
+      // Apply the segment's redirections: where stdout and stderr go, and stdin.
+      let dest1: Dest = isLast ? { to: 'terminal' } : { to: 'pipe' };
+      let dest2: Dest = { to: 'terminal' };
+      let input = stdin;
+      let redirectError: string | null = null;
+      for (const r of segment.redirects) {
+        if (r.kind === 'in') {
+          const read = this.readRedirect(r.file);
+          if (typeof read === 'string') input = read;
+          else redirectError = read.error;
+        } else if (r.kind === 'out') {
+          if (r.fd === 1) dest1 = this.fileDest(r);
+          else dest2 = this.fileDest(r);
+        } else if (r.kind === 'both') {
+          dest1 = dest2 = this.fileDest(r);
+        } else {
+          const src: Dest = r.toFd === 1 ? dest1 : dest2;
+          if (r.fd === 1) dest1 = src;
+          else dest2 = src;
         }
+      }
+      if (redirectError) {
+        terminal += redirectError;
+        exitCode = 1;
         stdin = '';
         continue;
       }
 
-      const command = this.commands.get(name);
-      if (!command) {
-        terminal += `${name}: command not found\n`;
-        exitCode = 127;
-        stdin = '';
-        continue;
+      // Each write goes straight to its destination, so when stdout and stderr both
+      // reach the terminal they interleave in the order the command wrote them.
+      const files = new Map<string, { append: boolean; text: string }>();
+      for (const dest of [dest1, dest2]) {
+        if (dest.to === 'file' && !files.has(dest.file)) files.set(dest.file, { append: dest.append, text: '' });
       }
+      let pipeOut = '';
+      const writeTo = (dest: Dest, text: string) => {
+        if (dest.to === 'terminal') terminal += text;
+        else if (dest.to === 'pipe') pipeOut += text;
+        else if (dest.to === 'file') files.get(dest.file)!.text += text;
+        // 'discard' drops it (that is /dev/null).
+      };
 
-      let stdout = '';
+      const [name, ...args] = segment.words;
       let request: InputRequest | undefined;
-      exitCode = command.run({
-        args,
-        input: stdin,
-        out: (text) => (stdout += text),
-        err: (text) => (terminal += text),
-        clearScreen: () => (clearScreen = true),
-        askInput: (r) => (request = r),
-        session: this,
-        shell: info,
-      });
-      this.emit({ type: 'command', name, args, exitCode, user: this.user, cwd: this.cwd, piped });
 
+      if (name === undefined) {
+        // Just redirections with no command (e.g. `> file`): open the files, run nothing.
+      } else {
+        const command = this.commands.get(name);
+        if (!command) {
+          writeTo(dest2, `${name}: command not found\n`);
+          exitCode = 127;
+        } else {
+          exitCode = command.run({
+            args,
+            input,
+            out: (text) => writeTo(dest1, text),
+            err: (text) => writeTo(dest2, text),
+            clearScreen: () => (clearScreen = true),
+            askInput: (r) => (request = r),
+            stdoutIsTerminal: dest1.to === 'terminal',
+            session: this,
+            shell: info,
+          });
+          this.emit({ type: 'command', name, args, exitCode, user: this.user, cwd: this.cwd, piped });
+        }
+      }
+
+      // A command may pause for input only when nothing is redirected (see canPause),
+      // so its output has already gone to the terminal.
       if (request && interactive) {
-        const result = this.finish(terminal + stdout, exitCode, clearScreen);
+        const result = this.finish(terminal, exitCode, clearScreen);
         result.input = this.pending(request);
         return result;
       }
 
-      if (segment.redirect) {
-        const error = this.writeRedirect(segment.redirect, stdout);
+      for (const [file, { append, text }] of files) {
+        const error = this.writeRedirect({ file, append }, text);
         if (error) {
           terminal += error;
           exitCode = 1;
         }
-        stdin = '';
-      } else if (isLast) {
-        terminal += stdout;
-      } else {
-        stdin = stdout;
       }
+      stdin = pipeOut;
     }
 
     return this.finish(terminal, exitCode, clearScreen);
+  }
+
+  /** Resolves a file redirection to its destination, folding /dev/null into a discard. */
+  private fileDest(r: { file: string; append: boolean }): Dest {
+    const found = this.fs.lookup(this.resolve(r.file));
+    if (found.ok && found.node.type === 'file' && found.node.device === 'null') return { to: 'discard' };
+    return { to: 'file', file: r.file, append: r.append };
+  }
+
+  /** Reads a file for `< file`, with the same checks the kernel makes, or returns the error text. */
+  private readRedirect(file: string): string | { error: string } {
+    const who = this.credentials();
+    const found = this.fs.lookupAs(this.resolve(file), who);
+    if (!found.ok) return { error: `bash: ${file}: ${ERRORS[found.code]}\n` };
+    if (found.node.type === 'dir') return { error: `bash: ${file}: ${ERRORS.EISDIR}\n` };
+    if (!canAccess(found.node, who, 'r')) return { error: `bash: ${file}: ${ERRORS.EACCES}\n` };
+    return found.node.content;
   }
 
   /** Writes a command's output to a file for `>`/`>>`, checking permissions as the kernel would. */

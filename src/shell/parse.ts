@@ -87,16 +87,23 @@ export interface Fragment {
 /** A single word before expansion: its fragments in order. */
 export type Word = Fragment[];
 
-/** Where a command's output goes: `> file` (overwrite) or `>> file` (append). */
-export interface Redirect {
-  file: Word;
-  append: boolean;
-}
+/**
+ * One redirection on a command, before the file name is expanded:
+ * - `out`:  `> file`, `>> file`, `2> file`, `2>> file` — a stream to a file.
+ * - `in`:   `< file` — a file as standard input.
+ * - `both`: `&> file`, `&>> file` — both stdout and stderr to one file.
+ * - `dup`:  `2>&1`, `1>&2` — point one stream at where another is going.
+ */
+export type RedirectOp =
+  | { kind: 'out'; fd: 1 | 2; file: Word; append: boolean }
+  | { kind: 'in'; file: Word }
+  | { kind: 'both'; file: Word; append: boolean }
+  | { kind: 'dup'; fd: 1 | 2; toFd: 1 | 2 };
 
-/** One command in a pipeline: its words and an optional output redirection. */
+/** One command in a pipeline: its words and any redirections, in the order written. */
 export interface PipeSegment {
   words: Word[];
-  redirect?: Redirect;
+  redirects: RedirectOp[];
 }
 
 export type Pipeline = PipeSegment[];
@@ -116,22 +123,23 @@ const syntaxError = (token: string) => `syntax error near unexpected token \`${t
 
 /**
  * Parses a whole line: pipelines joined by `|`, chained with `;`, `&&` and
- * `||`, each command with an optional `>`/`>>` redirection. Quoting works as in
- * a single command; the operators count only when not quoted or escaped. Words
- * keep their quoting so the shell can expand them afterwards.
+ * `||`, each command with redirections (`>`, `>>`, `2>`, `&>`, `<`, `2>&1`).
+ * Quoting works as in a single command; the operators count only when not
+ * quoted or escaped. Words keep their quoting so the shell can expand them.
  */
 export function parseProgram(line: string): ProgramResult {
   const stages: Stage[] = [];
   let pipeline: Pipeline = [];
   let words: Word[] = [];
-  let redirect: Redirect | undefined;
+  let redirects: RedirectOp[] = [];
   let fragments: Word = [];
   let inWord = false;
   let connector: Connector = 'first';
   // The operator most recently consumed, to name the token if the line ends on it.
   let lastOp: '|' | ';' | '&&' | '||' | null = null;
-  // After `>` or `>>` the next word is the file name, not a command argument.
-  let awaitingFile: false | { append: boolean } = false;
+  // After a redirection operator the next word is its file name, not an argument.
+  type Pending = { kind: 'out'; fd: 1 | 2; append: boolean } | { kind: 'in' } | { kind: 'both'; append: boolean };
+  let pendingFile: Pending | null = null;
   let i = 0;
 
   const push = (text: string, quote: Fragment['quote']) => {
@@ -145,9 +153,11 @@ export function parseProgram(line: string): ProgramResult {
 
   const endWord = () => {
     if (!inWord) return;
-    if (awaitingFile) {
-      redirect = { file: fragments, append: awaitingFile.append };
-      awaitingFile = false;
+    if (pendingFile) {
+      if (pendingFile.kind === 'out') redirects.push({ kind: 'out', fd: pendingFile.fd, file: fragments, append: pendingFile.append });
+      else if (pendingFile.kind === 'both') redirects.push({ kind: 'both', file: fragments, append: pendingFile.append });
+      else redirects.push({ kind: 'in', file: fragments });
+      pendingFile = null;
     } else {
       words.push(fragments);
     }
@@ -157,12 +167,23 @@ export function parseProgram(line: string): ProgramResult {
 
   const endPipe = (operator: string): ProgramResult | null => {
     endWord();
-    if (awaitingFile) return { ok: false, error: syntaxError(operator) };
-    if (words.length === 0 && !redirect) return { ok: false, error: syntaxError(operator) };
-    pipeline.push({ words, redirect });
+    if (pendingFile) return { ok: false, error: syntaxError(operator) };
+    if (words.length === 0 && redirects.length === 0) return { ok: false, error: syntaxError(operator) };
+    pipeline.push({ words, redirects });
     words = [];
-    redirect = undefined;
+    redirects = [];
     return null;
+  };
+
+  /** A bare `1` or `2` typed immediately before `>` names the file descriptor. */
+  const takeFd = (): 1 | 2 => {
+    if (inWord && fragments.length === 1 && fragments[0].quote === 'none' && /^[12]$/.test(fragments[0].text)) {
+      const fd = Number(fragments[0].text) as 1 | 2;
+      fragments = [];
+      inWord = false;
+      return fd;
+    }
+    return 1;
   };
 
   const endStage = (operator: string): ProgramResult | null => {
@@ -200,6 +221,15 @@ export function parseProgram(line: string): ProgramResult {
       continue;
     }
 
+    // `&>` / `&>>`: send both stdout and stderr to one file.
+    if (ch === '&' && line[i + 1] === '>') {
+      endWord();
+      const append = line[i + 2] === '>';
+      pendingFile = { kind: 'both', append };
+      i += append ? 3 : 2;
+      continue;
+    }
+
     if (ch === '&') return { ok: false, error: syntaxError('&') };
 
     if (ch === ';') {
@@ -219,11 +249,25 @@ export function parseProgram(line: string): ProgramResult {
       continue;
     }
 
+    if (ch === '<') {
+      endWord();
+      pendingFile = { kind: 'in' };
+      i++;
+      continue;
+    }
+
     if (ch === '>') {
+      const fd = takeFd();
       endWord();
       const append = line[i + 1] === '>';
-      awaitingFile = { append };
       i += append ? 2 : 1;
+      // `2>&1` / `>&2`: point this descriptor at wherever another one is going.
+      if (line[i] === '&' && (line[i + 1] === '1' || line[i + 1] === '2')) {
+        redirects.push({ kind: 'dup', fd, toFd: Number(line[i + 1]) as 1 | 2 });
+        i += 2;
+        continue;
+      }
+      pendingFile = { kind: 'out', fd, append };
       continue;
     }
 
@@ -271,8 +315,8 @@ export function parseProgram(line: string): ProgramResult {
   }
 
   endWord();
-  if (awaitingFile) return { ok: false, error: syntaxError('newline') };
-  const segmentPending = words.length > 0 || redirect !== undefined;
+  if (pendingFile) return { ok: false, error: syntaxError('newline') };
+  const segmentPending = words.length > 0 || redirects.length > 0;
   if (!segmentPending) {
     // The line ended right after an operator, or is blank.
     if (lastOp === null) return { ok: true, stages: [] };
