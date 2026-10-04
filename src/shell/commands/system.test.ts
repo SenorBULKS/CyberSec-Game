@@ -89,3 +89,60 @@ describe('cron', () => {
     expect(r.exitCode).toBe(1);
   });
 });
+
+describe('kill', () => {
+  it('stops a process the player owns and drops its sockets', () => {
+    const { shell: sh, machine } = shell();
+    const pid = machine.addProcess({ user: 'newhire', command: '/tmp/beacon' });
+    machine.addSocket({ proto: 'tcp', address: '0.0.0.0', port: 4444, process: 'beacon', pid });
+    const events: string[] = [];
+    sh.onEvent((e) => e.type === 'kill' && events.push(`kill ${e.pid} sig ${e.signal}`));
+    const r = sh.execute(`kill ${pid}`);
+    expect(r.exitCode).toBe(0);
+    expect(r.output).toBe('');
+    expect(machine.process(pid)).toBeUndefined();
+    expect(sh.execute('ss -tlnp').output).not.toContain('4444');
+    expect(events).toEqual([`kill ${pid} sig 15`]);
+  });
+
+  it('reads -9 and -KILL as SIGKILL', () => {
+    const { shell: sh, machine } = shell();
+    const pid = machine.addProcess({ user: 'newhire', command: '/tmp/beacon' });
+    const signals: number[] = [];
+    sh.onEvent((e) => e.type === 'kill' && signals.push(e.signal));
+    sh.execute(`kill -9 ${pid}`);
+    const pid2 = machine.addProcess({ user: 'newhire', command: '/tmp/beacon' });
+    sh.execute(`kill -KILL ${pid2}`);
+    expect(signals).toEqual([9, 9]);
+  });
+
+  it('will not let a user kill another user’s process', () => {
+    const { shell: sh, machine } = shell();
+    const pid = machine.addProcess({ user: 'root', command: '/usr/sbin/sshd -D' });
+    const r = sh.execute(`kill ${pid}`);
+    expect(r.output).toContain('Operation not permitted');
+    expect(r.exitCode).toBe(1);
+    expect(machine.process(pid)).toBeDefined();
+  });
+
+  it('root can kill any process', () => {
+    const { machine } = shell();
+    const pid = machine.addProcess({ user: 'www-data', command: '/tmp/rogue' });
+    const root = new Shell({ machine, user: 'root' });
+    expect(root.execute(`kill ${pid}`).exitCode).toBe(0);
+    expect(machine.process(pid)).toBeUndefined();
+  });
+
+  it('reports an unknown pid', () => {
+    const r = shell().shell.execute('kill 99999');
+    expect(r.output).toContain('(99999) - No such process');
+    expect(r.exitCode).toBe(1);
+  });
+
+  it('STOP pauses without ending the process', () => {
+    const { shell: sh, machine } = shell();
+    const pid = machine.addProcess({ user: 'newhire', command: '/tmp/beacon' });
+    expect(sh.execute(`kill -STOP ${pid}`).exitCode).toBe(0);
+    expect(machine.process(pid)).toBeDefined();
+  });
+});

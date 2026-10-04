@@ -274,7 +274,14 @@ export class Shell implements Session {
     }
     const body =
       redirect.append && existing.ok && existing.node.type === 'file' ? existing.node.content + content : content;
-    this.fs.writeFile(target, body, { owner: this.user, group: this.user, mtime: this.machine.clock });
+    if (existing.ok && existing.node.type === 'file') {
+      // `>` and `>>` reuse the inode, so owner, group and mode stay as they were.
+      const { owner, group, mode } = existing.node;
+      this.fs.writeFile(target, body, { owner, group, mode, mtime: this.machine.clock });
+    } else {
+      this.fs.writeFile(target, body, { owner: this.user, group: this.user, mtime: this.machine.clock });
+    }
+    this.emit({ type: 'write', path: target, user: this.user });
     return null;
   }
 

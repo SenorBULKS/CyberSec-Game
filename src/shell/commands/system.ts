@@ -91,6 +91,79 @@ export const crontab: Command = {
   },
 };
 
+const SIGNALS: Record<string, number> = {
+  HUP: 1, INT: 2, QUIT: 3, KILL: 9, TERM: 15, STOP: 19, CONT: 18,
+};
+
+/** Reads kill's signal argument, e.g. -9, -KILL, -SIGKILL or `-s TERM`. Returns -1 for a bad name. */
+function parseSignal(args: string[]): { signal: number; pids: string[] } {
+  let signal = 15;
+  const pids: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '-s') {
+      signal = signalNumber(args[++i] ?? '');
+    } else if (/^-\d+$/.test(arg)) {
+      signal = Number(arg.slice(1));
+    } else if (/^-[A-Za-z]/.test(arg)) {
+      signal = signalNumber(arg.slice(1));
+    } else {
+      pids.push(arg);
+    }
+  }
+  return { signal, pids };
+}
+
+function signalNumber(name: string): number {
+  const upper = name.toUpperCase().replace(/^SIG/, '');
+  if (/^\d+$/.test(name)) return Number(name);
+  return SIGNALS[upper] ?? -1;
+}
+
+export const kill: Command = {
+  name: 'kill',
+  summary: 'Stop a process by its PID, e.g. kill 1234 or kill -9 1234',
+  run({ args, err, session }: CommandContext) {
+    const { signal, pids } = parseSignal(args);
+    if (pids.length === 0) return usageKill(err);
+    if (signal < 0) {
+      err('kill: invalid signal specification\n');
+      return 1;
+    }
+    const who = session.credentials();
+    let status = 0;
+    for (const raw of pids) {
+      const pid = Number(raw);
+      if (!Number.isInteger(pid)) {
+        err(`kill: ${raw}: arguments must be process or job IDs\n`);
+        status = 1;
+        continue;
+      }
+      const process = session.machine.process(pid);
+      if (!process) {
+        err(`kill: (${pid}) - No such process\n`);
+        status = 1;
+        continue;
+      }
+      // Only root may signal a process it does not own.
+      if (who.uid !== 0 && process.user !== who.user) {
+        err(`kill: (${pid}) - Operation not permitted\n`);
+        status = 1;
+        continue;
+      }
+      // STOP and CONT pause and resume; they do not end the process.
+      if (signal !== 19 && signal !== 18) session.machine.removeProcess(pid);
+      session.emit({ type: 'kill', pid, signal, user: session.user });
+    }
+    return status;
+  },
+};
+
+function usageKill(err: (t: string) => void): number {
+  err('Usage: kill [-s sigspec | -signum] pid...\n');
+  return 1;
+}
+
 export const ss: Command = {
   name: 'ss',
   summary: 'Show listening network sockets (try ss -tlnp)',
