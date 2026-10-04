@@ -1,5 +1,6 @@
 import type { FileSystem, LookupResult } from '../fs/FileSystem';
 import type { Credentials } from '../fs/permissions';
+import type { GameEvent } from '../game/events';
 import type { Machine } from '../system/Machine';
 
 /** The logged-in session a command runs in. Commands may change `cwd`. */
@@ -23,6 +24,8 @@ export interface Session {
   switchUser: (name: string, options: { login: boolean }) => void;
   /** Leaves the current `su` shell. Returns false when already in the first login shell. */
   exitUser: () => boolean;
+  /** Reports something the player did, for challenge objectives. */
+  emit: (event: GameEvent) => void;
 }
 
 export interface InputIO {

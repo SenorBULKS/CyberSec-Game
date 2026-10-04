@@ -1,11 +1,13 @@
+import type { Challenge, ChallengeSetup } from '../game/challenge';
 import { Shell } from '../shell/Shell';
 import { Machine } from '../system/Machine';
 
 /**
- * A small practice world used until the challenge engine arrives: a home
- * directory to explore, plus a colleague whose files show permissions at work.
+ * A free-play world with no objectives: a home directory to explore, plus a
+ * colleague whose files show permissions at work. Open it with #sandbox.
+ * Tests use it as a known, stable world.
  */
-export function createSandboxShell(): Shell {
+function setup(): ChallengeSetup {
   const machine = new Machine('harborline');
   machine.addUser({
     name: 'mwalker',
@@ -34,5 +36,23 @@ export function createSandboxShell(): Shell {
   fs.writeFile('/home/mwalker/private/notes.txt', 'Only Marcus can read this.\n', { ...marcus, mode: 0o600 });
   fs.writeFile('/home/mwalker/.profile', '# ~/.profile: executed by the command interpreter for login shells.\n', marcus);
 
-  return new Shell({ machine, user: 'newhire' });
+  return { machine, user: 'newhire' };
+}
+
+export const sandbox: Challenge = {
+  id: 'sandbox',
+  title: 'Sandbox',
+  setup,
+  motd:
+    'Welcome to the Harborline Logistics server.\n' +
+    'Type \x1b[1mhelp\x1b[0m and press Enter to see what you can do.\n\n',
+  briefing: 'Free play: explore the server. Marcus\'s practice password is letmein.',
+  objectives: [],
+  answer: '',
+};
+
+/** A plain shell on the sandbox world, for tests. */
+export function createSandboxShell(): Shell {
+  const { machine, user } = setup();
+  return new Shell({ machine, user });
 }

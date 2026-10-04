@@ -2,14 +2,16 @@ import { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import { createSandboxShell } from '../content/sandbox';
+import type { Shell } from '../shell/Shell';
 import { TerminalController } from './TerminalController';
 
-const MOTD =
-  'Welcome to the Harborline Logistics server.\n' +
-  'Type \x1b[1mhelp\x1b[0m and press Enter to see what you can do.\n\n';
+interface Props {
+  shell: Shell;
+  /** Banner printed before the first prompt. */
+  motd: string;
+}
 
-export function TerminalView() {
+export function TerminalView({ shell, motd }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export function TerminalView() {
     term.open(host);
     fit.fit();
 
-    const controller = new TerminalController(term, createSandboxShell(), { motd: MOTD });
+    const controller = new TerminalController(term, shell, { motd });
     const input = term.onData((data) => controller.handleInput(data));
     controller.start();
     term.focus();
@@ -51,7 +53,7 @@ export function TerminalView() {
       input.dispose();
       term.dispose();
     };
-  }, []);
+  }, [shell, motd]);
 
   return <div className="terminal-host" ref={hostRef} data-testid="terminal" />;
 }

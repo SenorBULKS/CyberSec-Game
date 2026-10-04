@@ -1,6 +1,11 @@
+import { useState } from 'react';
+import { challengeFromHash } from './challenges';
+import { ChallengeRun } from './game/ChallengeRun';
+import { MissionPanel } from './game/MissionPanel';
 import { TerminalView } from './terminal/TerminalView';
 
 export function App() {
+  const [run] = useState(() => new ChallengeRun(challengeFromHash(window.location.hash)));
   return (
     <div className="app">
       <header className="topbar">
@@ -8,11 +13,10 @@ export function App() {
       </header>
       <main className="workspace">
         <section className="terminal-pane" aria-label="Terminal">
-          <TerminalView />
+          <TerminalView shell={run.shell} motd={run.challenge.motd} />
         </section>
         <aside className="mission-pane" aria-label="Mission">
-          <h2>Mission</h2>
-          <p className="muted">Your briefing and objectives will appear here.</p>
+          <MissionPanel run={run} />
         </aside>
       </main>
     </div>

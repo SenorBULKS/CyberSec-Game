@@ -37,6 +37,7 @@ export const cd: Command = {
     if (args[0] === '-') out(target + '\n');
     session.oldpwd = session.cwd;
     session.cwd = session.resolve(target);
+    session.emit({ type: 'cd', path: session.cwd, user: session.user });
     return 0;
   },
 };
