@@ -110,3 +110,84 @@ describe('/etc/shadow', () => {
     expect(shadow).not.toContain('Tide!Pool2024');
   });
 });
+
+/** A shell whose player (newhire) is a sudoer with a password, plus a root-only secret. */
+function sudoShell() {
+  const machine = new Machine('harborline');
+  machine.addUser({ name: 'newhire', uid: 1001, password: 'hunter2', groups: ['sudo'] });
+  machine.fs.writeFile('/root/secret.txt', 'top secret\n', { owner: 'root', group: 'root', mode: 0o600 });
+  return new Shell({ machine, user: 'newhire' });
+}
+
+describe('sudo', () => {
+  it('runs a command as root after the right password', () => {
+    const sh = sudoShell();
+    // Without sudo, newhire cannot read a root-only file.
+    expect(sh.execute('cat /root/secret.txt').output).toContain('Permission denied');
+    const first = sh.execute('sudo cat /root/secret.txt');
+    expect(first.input).toMatchObject({ prompt: '[sudo] password for newhire: ', secret: true });
+    const r = first.input!.submit('hunter2');
+    expect(r.output).toBe('top secret\n');
+    expect(r.exitCode).toBe(0);
+    // The shell is back to newhire afterwards.
+    expect(sh.user).toBe('newhire');
+  });
+
+  it('rejects a wrong password', () => {
+    const sh = sudoShell();
+    const r = sh.execute('sudo cat /root/secret.txt').input!.submit('wrong');
+    expect(r.output).toContain('Sorry, try again.');
+    expect(r.exitCode).toBe(1);
+  });
+
+  it('remembers the password for later sudo calls', () => {
+    const sh = sudoShell();
+    sh.execute('sudo cat /root/secret.txt').input!.submit('hunter2');
+    // The second sudo does not prompt again.
+    const second = sh.execute('sudo cat /root/secret.txt');
+    expect(second.input).toBeUndefined();
+    expect(second.output).toBe('top secret\n');
+  });
+
+  it('forgets the password with sudo -k', () => {
+    const sh = sudoShell();
+    sh.execute('sudo cat /root/secret.txt').input!.submit('hunter2');
+    sh.execute('sudo -k');
+    expect(sh.execute('sudo cat /root/secret.txt').input).toMatchObject({ prompt: '[sudo] password for newhire: ' });
+  });
+
+  it('refuses a user who is not in the sudoers file', () => {
+    const machine = new Machine('harborline');
+    machine.addUser({ name: 'guest', uid: 1005, password: 'x' });
+    const sh = new Shell({ machine, user: 'guest' });
+    const r = sh.execute('sudo cat /etc/shadow');
+    expect(r.output).toBe('guest is not in the sudoers file. This incident will be reported.\n');
+    expect(r.exitCode).toBe(1);
+    expect(r.input).toBeUndefined();
+  });
+
+  it('emits a command event for the elevated command, run as root', () => {
+    const sh = sudoShell();
+    const events: { name: string; user: string }[] = [];
+    sh.onEvent((e) => {
+      if (e.type === 'command') events.push({ name: e.name, user: e.user });
+    });
+    sh.execute('sudo cat /root/secret.txt').input!.submit('hunter2');
+    expect(events).toContainEqual({ name: 'cat', user: 'root' });
+  });
+
+  it('reports usage with no command, and an unknown user with -u', () => {
+    const sh = sudoShell();
+    expect(sh.execute('sudo').output).toContain('usage: sudo');
+    expect(sh.execute('sudo -u ghost whoami').output).toContain('unknown user: ghost');
+  });
+
+  it('root uses sudo with no password', () => {
+    const machine = new Machine('harborline');
+    machine.fs.writeFile('/root/secret.txt', 'top secret\n', { owner: 'root', group: 'root', mode: 0o600 });
+    const root = new Shell({ machine, user: 'root' });
+    const r = root.execute('sudo cat /root/secret.txt');
+    expect(r.input).toBeUndefined();
+    expect(r.output).toBe('top secret\n');
+  });
+});

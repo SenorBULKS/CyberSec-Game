@@ -24,8 +24,21 @@ export interface Session {
   switchUser: (name: string, options: { login: boolean }) => void;
   /** Leaves the current `su` shell. Returns false when already in the first login shell. */
   exitUser: () => boolean;
+  /** Runs a command as another user for the duration of that command, as `sudo` does. Returns its exit code. */
+  runAs: (user: string, words: string[], io: RunContext) => number;
+  /** Whether sudo has already accepted the password this session, so it need not ask again. */
+  sudoAuthed: boolean;
   /** Reports something the player did, for challenge objectives. */
   emit: (event: GameEvent) => void;
+}
+
+/** The output channels and stdin a command runs with, for running one command inside another (sudo). */
+export interface RunContext {
+  input: string;
+  out: (text: string) => void;
+  err: (text: string) => void;
+  clearScreen: () => void;
+  askInput: (request: InputRequest) => void;
 }
 
 export interface InputIO {

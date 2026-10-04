@@ -53,6 +53,7 @@ export const PROGRAMS = [
   'ss',
   'stat',
   'su',
+  'sudo',
   'tail',
   'wc',
   'whoami',
@@ -76,8 +77,9 @@ export function createBaseSystem(hostname: string): FileSystem {
   fs.mkdir('/var/tmp', { mode: 0o1777 });
 
   for (const name of PROGRAMS) fs.writeFile(`/usr/bin/${name}`, ELF, { mode: 0o755 });
-  // su runs as root whoever starts it (setuid), so it can check any user's password.
+  // su and sudo run as root whoever starts them (setuid), so they can check passwords.
   fs.writeFile('/usr/bin/su', ELF, { mode: 0o4755 });
+  fs.writeFile('/usr/bin/sudo', ELF, { mode: 0o4755 });
 
   fs.writeFile('/etc/hostname', `${hostname}\n`);
   fs.writeFile('/etc/os-release', OS_RELEASE);
