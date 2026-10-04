@@ -47,6 +47,8 @@ export interface InputRequest {
 export interface CommandContext {
   /** Arguments after the command name. */
   args: string[];
+  /** Standard input: text piped in from the previous command, or '' when there is none. */
+  input: string;
   /** Writes to standard output. Use '\n' for newlines. */
   out: (text: string) => void;
   /** Writes to standard error. */

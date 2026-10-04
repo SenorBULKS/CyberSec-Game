@@ -1,10 +1,11 @@
-import type { FileSystem } from '../fs/FileSystem';
+import { ERRORS, type FileSystem } from '../fs/FileSystem';
+import { canAccess } from '../fs/permissions';
 import { Machine } from '../system/Machine';
-import { resolvePath, tildify } from '../fs/path';
+import { dirname, resolvePath, tildify } from '../fs/path';
 import type { GameEvent } from '../game/events';
 import { allCommands } from './commands';
 import { complete, type Completion } from './complete';
-import { parseCommandLine } from './parse';
+import { parsePipeline, type PipeSegment, type Redirect } from './parse';
 import type { Command, InputRequest, Session, ShellInfo } from './types';
 
 export interface ExecResult {
@@ -176,48 +177,105 @@ export class Shell implements Session {
   execute(line: string, options: ExecOptions = {}): ExecResult {
     if (options.columns) this.columns = options.columns;
     if (line.trim() !== '') this.typed({ kind: 'line', text: line });
-    let output = '';
-    let clearScreen = false;
-    const write = (text: string) => {
-      output += text;
-    };
 
-    const parsed = parseCommandLine(line);
-    if (!parsed.ok) {
-      write(`bash: ${parsed.error}\n`);
-      return this.finish(output, 2, false);
-    }
-    if (parsed.words.length === 0) return this.finish('', this.lastExitCode, false);
+    const parsed = parsePipeline(line);
+    if (!parsed.ok) return this.finish(`bash: ${parsed.error}\n`, 2, false);
+    if (parsed.segments.length === 0) return this.finish('', this.lastExitCode, false);
+    return this.runPipeline(parsed.segments);
+  }
 
-    const [name, ...args] = parsed.words;
-    const command = this.commands.get(name);
-    if (!command) {
-      write(`${name}: command not found\n`);
-      return this.finish(output, 127, false);
-    }
-
+  /** Runs a pipeline: each command's stdout feeds the next, or a file, or the screen. */
+  private runPipeline(segments: PipeSegment[]): ExecResult {
     const info: ShellInfo = {
       commandNames: () => [...this.commands.keys()].sort(),
       describe: (n) => this.commands.get(n)?.summary,
     };
-    let request: InputRequest | undefined;
-    const exitCode = command.run({
-      args,
-      out: write,
-      err: write,
-      clearScreen: () => {
-        clearScreen = true;
-      },
-      askInput: (r) => {
-        request = r;
-      },
-      session: this,
-      shell: info,
-    });
-    const result = this.finish(output, exitCode, clearScreen);
-    if (request) result.input = this.pending(request);
-    this.emit({ type: 'command', name, args, exitCode, user: this.user, cwd: this.cwd });
-    return result;
+    // Only a single, un-redirected command may pause for input (su's password).
+    const interactive = segments.length === 1 && !segments[0].redirect;
+    let terminal = '';
+    let clearScreen = false;
+    let stdin = '';
+    let exitCode = 0;
+
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      const isLast = i === segments.length - 1;
+      const [name, ...args] = segment.words;
+
+      // `> file` with no command just creates or truncates the file.
+      if (name === undefined) {
+        if (segment.redirect) {
+          const error = this.writeRedirect(segment.redirect, '');
+          exitCode = error ? 1 : 0;
+          if (error) terminal += error;
+        }
+        stdin = '';
+        continue;
+      }
+
+      const command = this.commands.get(name);
+      if (!command) {
+        terminal += `${name}: command not found\n`;
+        exitCode = 127;
+        stdin = '';
+        continue;
+      }
+
+      let stdout = '';
+      let request: InputRequest | undefined;
+      exitCode = command.run({
+        args,
+        input: stdin,
+        out: (text) => (stdout += text),
+        err: (text) => (terminal += text),
+        clearScreen: () => (clearScreen = true),
+        askInput: (r) => (request = r),
+        session: this,
+        shell: info,
+      });
+      this.emit({ type: 'command', name, args, exitCode, user: this.user, cwd: this.cwd });
+
+      if (request && interactive) {
+        const result = this.finish(terminal + stdout, exitCode, clearScreen);
+        result.input = this.pending(request);
+        return result;
+      }
+
+      if (segment.redirect) {
+        const error = this.writeRedirect(segment.redirect, stdout);
+        if (error) {
+          terminal += error;
+          exitCode = 1;
+        }
+        stdin = '';
+      } else if (isLast) {
+        terminal += stdout;
+      } else {
+        stdin = stdout;
+      }
+    }
+
+    return this.finish(terminal, exitCode, clearScreen);
+  }
+
+  /** Writes a command's output to a file for `>`/`>>`, checking permissions as the kernel would. */
+  private writeRedirect(redirect: Redirect, content: string): string | null {
+    const target = this.resolve(redirect.file);
+    const who = this.credentials();
+    const existing = this.fs.lookup(target);
+    if (existing.ok && existing.node.type === 'dir') return `bash: ${redirect.file}: ${ERRORS.EISDIR}\n`;
+    const parent = this.fs.lookupAs(dirname(target), who);
+    if (!parent.ok) return `bash: ${redirect.file}: ${ERRORS[parent.code]}\n`;
+    if (parent.node.type !== 'dir') return `bash: ${redirect.file}: ${ERRORS.ENOTDIR}\n`;
+    if (existing.ok) {
+      if (!canAccess(existing.node, who, 'w')) return `bash: ${redirect.file}: ${ERRORS.EACCES}\n`;
+    } else if (!canAccess(parent.node, who, 'w') || !canAccess(parent.node, who, 'x')) {
+      return `bash: ${redirect.file}: ${ERRORS.EACCES}\n`;
+    }
+    const body =
+      redirect.append && existing.ok && existing.node.type === 'file' ? existing.node.content + content : content;
+    this.fs.writeFile(target, body, { owner: this.user, group: this.user, mtime: this.machine.clock });
+    return null;
   }
 
   private pending(request: InputRequest): PendingInput {
