@@ -20,12 +20,25 @@ function visible(message: GameMessage, mode: PlayMode): boolean {
 export function MissionPanel({ run, mode, onModeChange, onDebrief }: Props) {
   const snapshot = useSyncExternalStore(run.subscribe, run.getSnapshot);
   const { challenge } = run;
-  const messages = snapshot.messages.filter((m) => visible(m, mode));
+  // Only the current step's messages: finishing an objective clears the earlier ones.
+  const messages = snapshot.stepMessages.filter((m) => visible(m, mode));
   const feedEnd = useRef<HTMLDivElement>(null);
+  const currentObjective = useRef<HTMLLIElement>(null);
+  const foot = useRef<HTMLElement>(null);
 
+  // Bring the newest message into view, but never scroll the current objective off the top.
   useEffect(() => {
-    feedEnd.current?.scrollIntoView?.({ block: 'end' });
-  }, [messages.length]);
+    const end = feedEnd.current;
+    const pane = end && scrollParent(end);
+    if (!end || !pane) return;
+    const top = pane.getBoundingClientRect().top - pane.scrollTop;
+    const visibleHeight = pane.clientHeight - (foot.current?.offsetHeight ?? 0);
+    const showNewest = end.getBoundingClientRect().bottom - top - visibleHeight;
+    const keepObjective = currentObjective.current
+      ? currentObjective.current.getBoundingClientRect().top - top - 8
+      : Infinity;
+    pane.scrollTop = Math.max(0, Math.min(showNewest, keepObjective));
+  }, [messages.length, snapshot.stepMessages]);
 
   const hintsLeft = snapshot.hintsTotal - snapshot.hintsShown;
 
@@ -58,7 +71,11 @@ export function MissionPanel({ run, mode, onModeChange, onDebrief }: Props) {
           <h3 id="objectives-heading">Objectives</h3>
           <ol className="objectives">
             {snapshot.objectives.map((o) => (
-              <li key={o.id} className={o.done ? 'done' : o.current ? 'current' : ''}>
+              <li
+                key={o.id}
+                ref={o.current ? currentObjective : undefined}
+                className={o.done ? 'done' : o.current ? 'current' : ''}
+              >
                 <span className="check" aria-hidden="true">
                   {o.done ? '✔' : o.current ? '▸' : '○'}
                 </span>
@@ -78,7 +95,7 @@ export function MissionPanel({ run, mode, onModeChange, onDebrief }: Props) {
       </section>
 
       {snapshot.solved && onDebrief && (
-        <footer className="mission-foot">
+        <footer className="mission-foot" ref={foot}>
           <button type="button" className="primary-button" onClick={onDebrief}>
             Read the debrief
           </button>
@@ -86,7 +103,7 @@ export function MissionPanel({ run, mode, onModeChange, onDebrief }: Props) {
       )}
 
       {!snapshot.solved && snapshot.hintsTotal > 0 && (
-        <footer className="mission-foot">
+        <footer className="mission-foot" ref={foot}>
           <button type="button" className="hint-button" disabled={hintsLeft === 0} onClick={() => run.requestHint()}>
             {hintsLeft === 0
               ? 'No more hints for this step'
@@ -99,6 +116,15 @@ export function MissionPanel({ run, mode, onModeChange, onDebrief }: Props) {
       )}
     </div>
   );
+}
+
+/** The nearest ancestor that scrolls vertically: the pane the panel sits in. */
+function scrollParent(element: HTMLElement): HTMLElement | null {
+  for (let el = element.parentElement; el; el = el.parentElement) {
+    const { overflowY } = getComputedStyle(el);
+    if (overflowY === 'auto' || overflowY === 'scroll') return el;
+  }
+  return null;
 }
 
 function Message({ message, mentor }: { message: GameMessage; mentor: { name: string; role: string } }) {

@@ -67,10 +67,23 @@ test('"I know Linux" mode hides the lessons but keeps hints and the result', asy
   await expect(feed(page)).toContainText('Which command lists files?');
   await run(page, 'cat note.txt');
   await expect(feed(page)).not.toContainText('Found it.');
+  await panel(page).getByRole('radio', { name: 'Guided' }).click();
+  await expect(feed(page)).toContainText('Found it.');
+  await panel(page).getByRole('radio', { name: 'I know Linux' }).click();
+
   await run(page, 'submit PRACTICE-42');
   await expect(feed(page)).toContainText('Challenge complete.');
   await expect(panel(page).getByRole('button', { name: /hint/i })).toHaveCount(0);
+});
 
-  await panel(page).getByRole('radio', { name: 'Guided' }).click();
-  await expect(feed(page)).toContainText('Found it.');
+test('finishing an objective clears the earlier messages', async ({ page }) => {
+  await page.goto('/#practice');
+  await panel(page).getByRole('button', { name: /hint/i }).click();
+  await expect(feed(page)).toContainText('Welcome!');
+  await expect(feed(page)).toContainText('Which command lists files?');
+  await run(page, 'ls');
+  await expect(feed(page)).toContainText('There is a file called note.txt here.');
+  await expect(feed(page)).not.toContainText('Welcome!');
+  await expect(feed(page)).not.toContainText('Which command lists files?');
+  await expect(feed(page).locator('.msg')).toHaveCount(2);
 });

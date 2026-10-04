@@ -18,6 +18,8 @@ export interface RunSnapshot {
   hintsTotal: number;
   /** Every message so far, oldest first. */
   messages: readonly GameMessage[];
+  /** The messages since the last objective was completed: what the player needs right now. */
+  stepMessages: readonly GameMessage[];
   solved: boolean;
 }
 
@@ -45,6 +47,8 @@ export class ChallengeRun {
   private messageListeners = new Set<(message: GameMessage) => void>();
   /** Every message so far, including any sent before the UI subscribed. */
   readonly messages: GameMessage[] = [];
+  /** Where the current step's messages start in `messages`. */
+  private stepStart = 0;
   /** Everything the player has typed or asked for, oldest first. */
   readonly log: LogEntry[] = [];
   private logListeners = new Set<() => void>();
@@ -157,6 +161,8 @@ export class ChallengeRun {
     const hit = objectives.findIndex((o) => !this.done.has(o.id) && o.completeWhen(event));
     if (hit === -1) return;
 
+    // A new step starts: earlier messages are no longer what the player needs.
+    this.stepStart = this.messages.length;
     // Doing a later step proves the earlier ones weren't needed: tick them too.
     for (const objective of objectives.slice(0, hit + 1)) {
       if (this.done.has(objective.id)) continue;
@@ -198,6 +204,7 @@ export class ChallengeRun {
       hintsShown: current ? (this.hintLevel.get(current.id) ?? 0) : 0,
       hintsTotal: current?.hints.length ?? 0,
       messages: [...this.messages],
+      stepMessages: this.messages.slice(this.stepStart),
       solved: this.solved,
     };
   }

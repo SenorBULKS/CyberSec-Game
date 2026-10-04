@@ -89,10 +89,22 @@ describe('MissionPanel', () => {
     const { run, feed } = setup('expert');
     expect(feed().textContent).toBe('');
     act(() => void run.nextHint());
-    act(() => void run.shell.execute('submit PRACTICE-42'));
     expect(feed().textContent).toContain('Which command lists files?');
+    act(() => void run.shell.execute('submit PRACTICE-42'));
     expect(feed().textContent).toContain('Challenge complete.');
     expect(feed().textContent).not.toContain('lists the files in the');
+  });
+
+  it('clears the earlier messages each time an objective is completed', () => {
+    const { run, feed } = setup();
+    act(() => void run.nextHint());
+    expect(feed().textContent).toContain('Welcome!');
+    expect(feed().textContent).toContain('Which command lists files?');
+    act(() => void run.shell.execute('ls'));
+    expect(feed().textContent).not.toContain('Welcome!');
+    expect(feed().textContent).not.toContain('Which command lists files?');
+    expect(feed().textContent).toContain('There is a file called note.txt here.');
+    expect(feed().textContent).toContain('prints what is inside a file');
   });
 
   it('switches mode', () => {
