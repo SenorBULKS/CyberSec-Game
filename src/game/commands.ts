@@ -34,7 +34,12 @@ export function gameCommands(run: ChallengeRun): Command[] {
         return 2;
       }
       if (run.submit(args.join(' '))) {
-        out(`${GREEN}✔ Correct! Challenge complete.${RESET}\n`);
+        if (run.getSnapshot().solved) {
+          out(`${GREEN}✔ Correct! Challenge complete.${RESET}\n`);
+        } else {
+          // The answer is right, but the challenge has objectives left (e.g. remediation).
+          out(`${GREEN}✔ Correct.${RESET} ${DIM}That is the right code, but you are not done yet — check your remaining objective.${RESET}\n`);
+        }
         return 0;
       }
       out(`${RED}✘ That is not the right code.${RESET} Check where you found it and try again.\n`);
