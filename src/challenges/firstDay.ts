@@ -10,7 +10,7 @@ import {
 } from '../game/challenge';
 import { Machine } from '../system/Machine';
 
-/** Marcus's password. He also used it for the tracking database, which is how it leaked. */
+/** Marcus's password. He also used it on the backup server, which is how it leaked. */
 const MARCUS_PASSWORD = 'Tidewater#22';
 const HANDOVER_CODE = 'HARBOR-7741';
 
@@ -40,7 +40,7 @@ cd ~
 df -h
 du -sh /var/log/*
 sudo journalctl -u tracking --since today
-mysql -u tracking_admin -p${MARCUS_PASSWORD} tracking
+sshpass -p ${MARCUS_PASSWORD} rsync -a /var/backups/ mwalker@10.20.0.40:/srv/backups/harborline/
 ls -l /var/backups
 sudo tail -n 50 /var/log/syslog
 free -m
@@ -66,8 +66,9 @@ Whoever reads this: welcome, and sorry for the mess.
 2. Backups run every night at 02:00 to /var/backups. Check them weekly.
 3. The web certificate renews itself. If the site ever shows a
    certificate warning, that renewal failed.
-4. The tracking database user is tracking_admin. Please give it its
-   own password; it still shares mine.
+4. Backups are copied to the backup server (10.20.0.40) under my
+   account there, which still uses my password. Please give that job
+   its own SSH key.
 5. Change my account password, or better, lock my account. I am not
    coming back for it.
 
@@ -234,7 +235,7 @@ export const firstDay: Challenge = {
       intro:
         'If his history is readable, you can see every command Marcus ran. Read it and look for anything that should never have been typed into a command.',
       outro:
-        'There: `mysql -u tracking_admin -pTidewater#22`. Marcus logged in to a [[database]] and typed its password straight into the command, so it was saved in his history. People often use one password everywhere. Maybe his account uses it too.',
+        'There: `sshpass -p Tidewater#22`. Marcus copied the backups to another server and typed his password straight into the command (`-p` tells `sshpass` the password comes next), so it was saved in his history. People often use one password everywhere. Maybe his account here uses it too.',
       hints: [
         'The file is `.bash_history` in Marcus\'s home directory. Remember the dot.',
         'Use `cat` on it, with the dot at the start of the name.',
@@ -290,7 +291,7 @@ export const firstDay: Challenge = {
       },
       {
         title: 'Shell history leaks passwords',
-        text: 'Marcus typed a password as part of a command, so bash saved it in `~/.bash_history`. Reading other users\' history files is a standard first step after breaking into a machine. Let tools ask for the password instead: `mysql -p` with nothing after it prompts for it, hidden.',
+        text: 'Marcus typed a password as part of a command, so bash saved it in `~/.bash_history`. Reading other users\' history files is a standard first step after breaking into a machine. Let tools ask for the password instead: plain `rsync` or `ssh` prompts for it, hidden, and SSH keys avoid typing passwords at all.',
       },
       {
         title: 'Permissions only protect what they cover',
@@ -298,11 +299,11 @@ export const firstDay: Challenge = {
       },
       {
         title: 'One leaked password opened everything',
-        text: 'The database password was also Marcus\'s login password. That is [[password reuse]]: one leak, every door. Use a different password for each account, and a password manager to remember them.',
+        text: 'The password for the backup server was also Marcus\'s login password here. That is [[password reuse]]: one leak, every door. Use a different password for each account, and a password manager to remember them.',
       },
       {
         title: 'What a sysadmin does next',
-        text: 'Lock Marcus\'s account, give the database its own new password, clear the leaked line from his history, and tighten his home directory. Changing a leaked password matters more than finding out who saw it.',
+        text: 'Lock Marcus\'s account, give the backup job its own SSH key, clear the leaked line from his history, and tighten his home directory. Changing a leaked password matters more than finding out who saw it.',
       },
     ],
   },

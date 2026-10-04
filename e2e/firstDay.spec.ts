@@ -43,14 +43,14 @@ test('a beginner plays First Day on the Box from the title screen to the debrief
     ['ls', ''],
     ['cd private', 'Permission denied. The server checked who you are'],
     ['ls -a', 'Look at .bash_history.'],
-    ['cat .bash_history', 'Marcus logged in to a database'],
+    ['cat .bash_history', 'Marcus copied the backups to another server'],
   ];
   for (const [line, mentorSays] of steps) {
     await run(page, line);
     if (mentorSays) await expect(feed(page)).toContainText(mentorSays);
     await promptFor(page, 'newhire');
   }
-  await expect(screenText(page)).toContainText('-pTidewater#22');
+  await expect(screenText(page)).toContainText('sshpass -p Tidewater#22');
 
   await suToMarcus(page);
   await expect(feed(page)).toContainText("You're in.");
@@ -79,10 +79,35 @@ test('an experienced player can go straight for the leak', async ({ page }) => {
   await run(page, 'grep -i pass /home/mwalker/.bash_history');
   await expect(screenText(page)).toContainText('grep: command not found');
   await run(page, 'cat /home/mwalker/.bash_history');
-  await expect(screenText(page)).toContainText('-pTidewater#22');
+  await expect(screenText(page)).toContainText('sshpass -p Tidewater#22');
   await suToMarcus(page);
   await run(page, 'cat ~/private/handover.txt');
   await run(page, 'submit harbor-7741');
   await expect(feed(page)).toContainText('Challenge complete.');
   await expect(feed(page)).not.toContainText("You're in.");
+});
+
+test('the leaked password stands on its own, so double-clicking it copies just the password', async ({ page }) => {
+  await page.goto('/#first-day');
+  await promptFor(page, 'newhire');
+  await run(page, 'cat /home/mwalker/.bash_history');
+  await expect(screenText(page)).toContainText('sshpass -p Tidewater#22');
+
+  // Find where "Tidewater" is drawn on screen and double-click it, as a player copying it would.
+  const point = await page.evaluate(() => {
+    const walker = document.createTreeWalker(document.querySelector('.xterm-rows')!, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const at = node.textContent!.indexOf('Tidewater');
+      if (at < 0) continue;
+      const range = document.createRange();
+      range.setStart(node, at + 3);
+      range.setEnd(node, at + 4);
+      const rect = range.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    }
+    return null;
+  });
+  expect(point).not.toBeNull();
+  await page.mouse.dblclick(point!.x, point!.y);
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe('Tidewater#22');
 });
