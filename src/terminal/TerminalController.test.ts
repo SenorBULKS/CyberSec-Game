@@ -125,6 +125,42 @@ describe('TerminalController', () => {
     expect(t.screen().slice(-3)).toEqual(['Password: ', 'su: Authentication failure', PROMPT]);
   });
 
+  it('buffers keys typed during the wrong-password pause and runs them after (QA #4)', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true });
+    let release: (() => void) | undefined;
+    const ctl = new TerminalController(term, practiceShell(), { wait: (_ms, then) => (release = then) });
+    const flush = () => new Promise<void>((resolve) => term.write('', resolve));
+    const type = async (data: string) => {
+      ctl.handleInput(data);
+      await flush();
+    };
+    const screen = () => {
+      const buf = term.buffer.active;
+      const lines: string[] = [];
+      for (let i = 0; i < buf.length; i++) lines.push(buf.getLine(i)!.translateToString(true));
+      while (lines.length && lines.at(-1) === '') lines.pop();
+      return lines;
+    };
+    ctl.start();
+    await flush();
+
+    await type('su mwalker\rguess\r'); // wrong password starts the pause
+    await type('whoami\r'); // typed during the pause
+    // Nothing has run yet: no whoami output line, and the failure has not printed.
+    expect(screen()).not.toContain('su: Authentication failure');
+
+    release!(); // the pause ends
+    await flush();
+
+    // The failure prints, then the command typed during the pause runs on its own.
+    expect(screen().slice(-4)).toEqual([
+      'su: Authentication failure',
+      PROMPT + 'whoami',
+      'newhire',
+      PROMPT,
+    ]);
+  });
+
   it('never puts a typed password into the command history', async () => {
     const t = await setup(80, practiceShell());
     await t.type('su mwalker\rletmein\rexit\r');

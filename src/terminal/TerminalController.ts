@@ -26,8 +26,10 @@ export class TerminalController {
   private cursorRow = 0;
   /** A question a command is waiting on, such as su's password prompt. */
   private pending?: PendingInput;
-  /** True while a command is "working" (e.g. su's delay); typing is ignored, as in a real shell. */
+  /** True while a command is "working" (e.g. su's delay). */
   private busy = false;
+  /** Keys pressed while busy, replayed once the command finishes, like a real terminal. */
+  private buffered = '';
   private readonly motd: string;
   private readonly wait: (ms: number, then: () => void) => void;
 
@@ -48,7 +50,12 @@ export class TerminalController {
 
   /** Raw input from xterm's onData: a key press or a paste. */
   handleInput(data: string) {
-    if (this.busy) return;
+    // A real terminal buffers what you type while a command runs and acts on it
+    // when the prompt returns, so a command typed during su's pause is not lost.
+    if (this.busy) {
+      this.buffered += data;
+      return;
+    }
     for (const event of this.editor.feed(data)) {
       switch (event.type) {
         case 'submit':
@@ -115,10 +122,19 @@ export class TerminalController {
       this.wait(result.delayMs, () => {
         this.busy = false;
         finish();
+        this.flushBuffered();
       });
     } else {
       finish();
     }
+  }
+
+  /** Replays keys typed during a delay, unless the command that finished started another wait. */
+  private flushBuffered() {
+    if (this.busy || this.buffered === '') return;
+    const queued = this.buffered;
+    this.buffered = '';
+    this.handleInput(queued);
   }
 
   private startInput(input: PendingInput) {
