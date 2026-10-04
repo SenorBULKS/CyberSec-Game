@@ -1,3 +1,5 @@
+import { TerminalView } from './terminal/TerminalView';
+
 export function App() {
   return (
     <div className="app">
@@ -6,10 +8,7 @@ export function App() {
       </header>
       <main className="workspace">
         <section className="terminal-pane" aria-label="Terminal">
-          <div className="terminal-placeholder">
-            <span className="prompt">newhire@harborline:~$</span>
-            <span className="cursor" aria-hidden="true" />
-          </div>
+          <TerminalView />
         </section>
         <aside className="mission-pane" aria-label="Mission">
           <h2>Mission</h2>
