@@ -103,6 +103,12 @@ export const wroteFile =
   (e) =>
     e.type === 'write' && (!path || e.path === path);
 
+/** Completes when the player deleted a file, optionally one at a specific path. */
+export const removedFile =
+  (path?: string): Trigger =>
+  (e) =>
+    e.type === 'remove' && (!path || e.path === path);
+
 /** Completes when the player changed a file's permission bits, optionally to a specific mode. */
 export const changedMode =
   (path?: string, mode?: number): Trigger =>
