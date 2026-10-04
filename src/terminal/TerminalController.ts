@@ -1,4 +1,5 @@
 import type { Shell } from '../shell/Shell';
+import { formatColumns } from '../shell/format';
 import { LineEditor } from './LineEditor';
 
 /** The part of an xterm.js Terminal the controller needs. */
@@ -45,11 +46,26 @@ export class TerminalController {
           this.cursorRow = 0;
           break;
         case 'complete':
-          // Tab completion arrives with the file system.
+          this.complete(event.repeated);
           break;
       }
     }
     this.drawLine(this.editor.buffer, this.editor.cursor);
+  }
+
+  private complete(repeated: boolean) {
+    const { buffer, cursor } = this.editor;
+    const result = this.shell.complete(buffer, cursor);
+    if (result.insert) {
+      this.editor.insert(result.insert);
+    } else if (repeated && result.candidates.length > 1) {
+      // Second Tab with nothing more to fill in: list the choices, like bash.
+      this.drawLine(buffer, buffer.length);
+      this.term.write('\r\n');
+      const items = result.candidates.map((c) => ({ display: c, width: c.length }));
+      this.write(formatColumns(items, this.term.cols));
+      this.cursorRow = 0;
+    }
   }
 
   private run(line: string) {

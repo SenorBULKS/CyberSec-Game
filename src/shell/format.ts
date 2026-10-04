@@ -43,11 +43,10 @@ export function formatColumns(items: ColumnItem[], lineWidth: number): string {
 }
 
 /**
- * Sorts file names the way `ls` does under an English UTF-8 locale:
- * case-insensitive, ignoring leading dots.
+ * Sorts file names the way `ls` does under the C.UTF-8 locale (Ubuntu's
+ * server default): by character code, so dot files come first and capitals
+ * before lowercase. Grouping hidden files together also makes them easy to spot.
  */
 export function compareNames(a: string, b: string): number {
-  const key = (s: string) => s.replace(/^\.+/, '').toLowerCase();
-  const byKey = key(a).localeCompare(key(b), 'en');
-  return byKey !== 0 ? byKey : a.localeCompare(b, 'en');
+  return a < b ? -1 : a > b ? 1 : 0;
 }

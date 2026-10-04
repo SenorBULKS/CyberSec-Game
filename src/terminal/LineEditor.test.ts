@@ -95,6 +95,15 @@ describe('LineEditor', () => {
 
   it('reports Tab and Ctrl+L', () => {
     const ed = new LineEditor();
-    expect(ed.feed('\t\x0c')).toEqual([{ type: 'complete' }, { type: 'clearScreen' }]);
+    expect(ed.feed('\t\x0c')).toEqual([{ type: 'complete', repeated: false }, { type: 'clearScreen' }]);
+  });
+
+  it('marks a second Tab in a row as repeated', () => {
+    const ed = new LineEditor();
+    expect(ed.feed('\t\t')).toEqual([
+      { type: 'complete', repeated: false },
+      { type: 'complete', repeated: true },
+    ]);
+    expect(ed.feed('a\t')).toEqual([{ type: 'complete', repeated: false }]);
   });
 });

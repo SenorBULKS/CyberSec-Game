@@ -30,8 +30,8 @@ describe('formatColumns', () => {
 });
 
 describe('compareNames', () => {
-  it('sorts like ls in an English locale', () => {
-    const names = ['Zeta', 'alpha', '.profile', 'Beta', '.bashrc', 'beta'];
-    expect(names.sort(compareNames)).toEqual(['alpha', '.bashrc', 'beta', 'Beta', '.profile', 'Zeta']);
+  it('sorts like ls in the C.UTF-8 locale', () => {
+    const names = ['Zeta', 'alpha', '.profile', 'Beta', '.bashrc', 'beta', '..', '.'];
+    expect(names.sort(compareNames)).toEqual(['.', '..', '.bashrc', '.profile', 'Beta', 'Zeta', 'alpha', 'beta']);
   });
 });

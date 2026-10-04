@@ -7,7 +7,7 @@ export type EditorEvent =
   | { type: 'submit'; line: string }
   | { type: 'cancel'; line: string }
   | { type: 'clearScreen' }
-  | { type: 'complete' };
+  | { type: 'complete'; repeated: boolean };
 
 const KEYS: Record<string, string> = {
   '\r': 'enter',
@@ -50,6 +50,8 @@ export class LineEditor {
   private historyIndex = 0;
   /** The unsent line saved when the player starts browsing history. */
   private draft = '';
+  /** Whether the previous key was Tab, so a second Tab can list the choices. */
+  private lastWasTab = false;
 
   /** Feeds raw terminal input (one key or a whole paste). Returns what happened. */
   feed(data: string): EditorEvent[] {
@@ -58,11 +60,14 @@ export class LineEditor {
     while (i < data.length) {
       const seq = KEY_SEQUENCES.find((s) => data.startsWith(s, i));
       if (seq) {
-        const event = this.handleKey(KEYS[seq]);
+        const key = KEYS[seq];
+        const event = this.handleKey(key);
         if (event) events.push(event);
+        this.lastWasTab = key === 'tab';
         i += seq.length;
         continue;
       }
+      this.lastWasTab = false;
       const ch = data[i];
       if (ch === '\x1b') {
         // An escape sequence we don't support (e.g. F-keys): skip it whole.
@@ -81,7 +86,8 @@ export class LineEditor {
     return this.history;
   }
 
-  private insert(text: string) {
+  /** Inserts text at the cursor, e.g. the rest of a Tab-completed name. */
+  insert(text: string) {
     this.buffer = this.buffer.slice(0, this.cursor) + text + this.buffer.slice(this.cursor);
     this.cursor += text.length;
   }
@@ -117,7 +123,7 @@ export class LineEditor {
       case 'clearScreen':
         return { type: 'clearScreen' };
       case 'tab':
-        return { type: 'complete' };
+        return { type: 'complete', repeated: this.lastWasTab };
       case 'backspace':
         if (this.cursor > 0) {
           this.buffer = this.buffer.slice(0, this.cursor - 1) + this.buffer.slice(this.cursor);
