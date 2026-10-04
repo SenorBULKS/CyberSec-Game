@@ -60,3 +60,32 @@ describe('ss', () => {
     expect(out).not.toContain(':22');
   });
 });
+
+describe('cron', () => {
+  it('ships a readable system crontab and drop-in directory', () => {
+    const { shell: sh } = shell();
+    expect(sh.execute('cat /etc/crontab').output).toContain('run-parts --report /etc/cron.hourly');
+    expect(sh.execute('ls /etc/cron.d').exitCode).toBe(0);
+  });
+
+  it('crontab -l shows the user’s own jobs', () => {
+    const { shell: sh, machine } = shell();
+    machine.setCrontab('newhire', '30 2 * * * /home/newhire/backup.sh\n');
+    expect(sh.execute('crontab -l').output).toBe('30 2 * * * /home/newhire/backup.sh\n');
+  });
+
+  it('says there is no crontab when the user has none', () => {
+    const { shell: sh } = shell();
+    const r = sh.execute('crontab -l');
+    expect(r.output).toBe('no crontab for newhire\n');
+    expect(r.exitCode).toBe(1);
+  });
+
+  it('refuses -u for a non-root user', () => {
+    const { shell: sh, machine } = shell();
+    machine.setCrontab('root', '0 3 * * * /root/job.sh\n');
+    const r = sh.execute('crontab -l -u root');
+    expect(r.output).toContain('must be privileged to use -u');
+    expect(r.exitCode).toBe(1);
+  });
+});
