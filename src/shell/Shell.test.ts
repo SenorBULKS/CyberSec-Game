@@ -100,6 +100,80 @@ describe('Shell pipelines and redirection', () => {
   });
 });
 
+describe('Shell stream redirection', () => {
+  it('ls writes one name per line when its output is piped', () => {
+    const sh = new Shell();
+    sh.execute('echo a > ~/a.txt');
+    sh.execute('echo b > ~/b.txt');
+    sh.execute('echo c > ~/c.txt');
+    // Piped, ls is one-per-line, so wc -l counts the files (not columns on one line).
+    expect(sh.execute('ls ~ | wc -l').output).toBe('3\n');
+  });
+
+  it('ls still lays out columns on the terminal', () => {
+    const sh = new Shell();
+    sh.execute('echo a > ~/a.txt');
+    sh.execute('echo b > ~/b.txt');
+    expect(sh.execute('ls ~').output).toBe('a.txt  b.txt\n');
+  });
+
+  it('sends stderr to a file with 2> and keeps stdout on the screen', () => {
+    const sh = new Shell();
+    expect(sh.execute('cat missing 2> err.log').output).toBe('');
+    expect(sh.execute('cat err.log').output).toBe('cat: missing: No such file or directory\n');
+  });
+
+  it('appends stderr with 2>>', () => {
+    const sh = new Shell();
+    sh.execute('cat one 2> err.log');
+    sh.execute('cat two 2>> err.log');
+    expect(sh.execute('cat err.log').output).toBe(
+      'cat: one: No such file or directory\ncat: two: No such file or directory\n',
+    );
+  });
+
+  it('discards stderr with 2>/dev/null', () => {
+    const r = new Shell().execute('cat missing 2>/dev/null');
+    expect(r.output).toBe('');
+  });
+
+  it('merges stderr into stdout with 2>&1', () => {
+    const r = new Shell().execute('cat missing 2>&1 | cat');
+    expect(r.output).toBe('cat: missing: No such file or directory\n');
+  });
+
+  it('sends both streams to one file with &>', () => {
+    const sh = new Shell();
+    sh.execute('echo hi > have.txt');
+    sh.execute('cat have.txt missing &> both.log');
+    expect(sh.execute('cat both.log').output).toBe('hi\ncat: missing: No such file or directory\n');
+  });
+
+  it('reads a file as standard input with <', () => {
+    const sh = new Shell();
+    sh.execute('echo fromfile > in.txt');
+    expect(sh.execute('cat < in.txt').output).toBe('fromfile\n');
+  });
+
+  it('reports a missing input file for <', () => {
+    const r = new Shell().execute('cat < nope.txt');
+    expect(r.output).toBe('bash: nope.txt: No such file or directory\n');
+    expect(r.exitCode).toBe(1);
+  });
+
+  it('discards writes to /dev/null and reads it back empty', () => {
+    const sh = new Shell();
+    expect(sh.execute('echo gone > /dev/null').output).toBe('');
+    expect(sh.execute('cat /dev/null').output).toBe('');
+  });
+
+  it('suppresses a command-not-found error with 2>/dev/null', () => {
+    const r = new Shell().execute('nope 2>/dev/null');
+    expect(r.output).toBe('');
+    expect(r.exitCode).toBe(127);
+  });
+});
+
 describe('Shell command chaining', () => {
   it('runs both sides of ; regardless of exit code', () => {
     const r = new Shell().execute('echo one ; echo two');

@@ -39,6 +39,8 @@ export interface RunContext {
   err: (text: string) => void;
   clearScreen: () => void;
   askInput: (request: InputRequest) => void;
+  /** Whether standard output is the terminal, not a pipe or file. */
+  stdoutIsTerminal: boolean;
 }
 
 export interface InputIO {
@@ -70,6 +72,11 @@ export interface CommandContext {
   clearScreen: () => void;
   /** Asks the player to type something; the command finishes in `onInput`. */
   askInput: (request: InputRequest) => void;
+  /**
+   * Whether standard output is the terminal, not a pipe or file. GNU tools like
+   * `ls` switch to one name per line when their output is not a terminal.
+   */
+  stdoutIsTerminal: boolean;
   session: Session;
   shell: ShellInfo;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCommandLine, parseProgram, type Word } from './parse';
+import { parseCommandLine, parseProgram, type RedirectOp, type Word } from './parse';
 
 const words = (line: string) => {
   const r = parseCommandLine(line);
@@ -51,6 +51,16 @@ describe('parseCommandLine', () => {
 /** The literal text of a word (its fragments joined), before any expansion. */
 const literal = (word: Word) => word.map((f) => f.text).join('');
 
+/** A readable view of one redirection, with its file name as literal text. */
+const redir = (r: RedirectOp) =>
+  r.kind === 'dup'
+    ? { kind: r.kind, fd: r.fd, toFd: r.toFd }
+    : r.kind === 'in'
+      ? { kind: r.kind, file: literal(r.file) }
+      : r.kind === 'both'
+        ? { kind: r.kind, file: literal(r.file), append: r.append }
+        : { kind: r.kind, fd: r.fd, file: literal(r.file), append: r.append };
+
 /** A readable view of parseProgram's output: each stage's connector and its segments' literal words. */
 const program = (line: string) => {
   const r = parseProgram(line);
@@ -59,15 +69,18 @@ const program = (line: string) => {
     connector: stage.connector,
     pipeline: stage.pipeline.map((seg) => ({
       words: seg.words.map(literal),
-      redirect: seg.redirect ? { file: literal(seg.redirect.file), append: seg.redirect.append } : undefined,
+      redirects: seg.redirects.map(redir),
     })),
   }));
 };
 
+/** The redirections parsed for a single command. */
+const redirects = (line: string) => program(line)[0].pipeline[0].redirects;
+
 describe('parseProgram', () => {
   it('reads a single command as one stage', () => {
     expect(program('ls -la /home')).toEqual([
-      { connector: 'first', pipeline: [{ words: ['ls', '-la', '/home'], redirect: undefined }] },
+      { connector: 'first', pipeline: [{ words: ['ls', '-la', '/home'], redirects: [] }] },
     ]);
   });
 
@@ -82,8 +95,27 @@ describe('parseProgram', () => {
   });
 
   it('reads > as overwrite and >> as append redirection', () => {
-    expect(program('echo hi > out.txt')[0].pipeline[0].redirect).toEqual({ file: 'out.txt', append: false });
-    expect(program('echo hi>>out.txt')[0].pipeline[0].redirect).toEqual({ file: 'out.txt', append: true });
+    expect(redirects('echo hi > out.txt')).toEqual([{ kind: 'out', fd: 1, file: 'out.txt', append: false }]);
+    expect(redirects('echo hi>>out.txt')).toEqual([{ kind: 'out', fd: 1, file: 'out.txt', append: true }]);
+  });
+
+  it('reads stderr, both-stream, input and dup redirections', () => {
+    expect(redirects('cmd 2> err.log')).toEqual([{ kind: 'out', fd: 2, file: 'err.log', append: false }]);
+    expect(redirects('cmd 2>>err.log')).toEqual([{ kind: 'out', fd: 2, file: 'err.log', append: true }]);
+    expect(redirects('cmd > out 2>&1')).toEqual([
+      { kind: 'out', fd: 1, file: 'out', append: false },
+      { kind: 'dup', fd: 2, toFd: 1 },
+    ]);
+    expect(redirects('find / 2>/dev/null')).toEqual([{ kind: 'out', fd: 2, file: '/dev/null', append: false }]);
+    expect(redirects('cmd &> all.log')).toEqual([{ kind: 'both', file: 'all.log', append: false }]);
+    expect(redirects('cmd &>>all.log')).toEqual([{ kind: 'both', file: 'all.log', append: true }]);
+    expect(redirects('cat < in.txt')).toEqual([{ kind: 'in', file: 'in.txt' }]);
+  });
+
+  it('treats a number glued to a word as part of the word, not a descriptor', () => {
+    const [stage] = program('echo abc2>out');
+    expect(stage.pipeline[0].words).toEqual(['echo', 'abc2']);
+    expect(stage.pipeline[0].redirects).toEqual([{ kind: 'out', fd: 1, file: 'out', append: false }]);
   });
 
   it('chains stages with ; && and ||', () => {
