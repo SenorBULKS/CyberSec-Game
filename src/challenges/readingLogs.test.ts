@@ -104,13 +104,14 @@ describe('Reading the Logs', () => {
 
   it('keeps the clock, banner and log dates consistent (QA)', () => {
     const r = new ChallengeRun(readingLogs);
-    // 1 Oct 2026 is a Thursday; the banner must agree.
-    expect(readingLogs.motd).toContain('Last login: Thu Oct  1');
+    // 5 Oct 2026 is a Monday; the banner must agree.
+    expect(readingLogs.motd).toContain('Last login: Mon Oct  5');
     const log = run(r, 'cat /var/log/auth.log');
-    expect(log).not.toContain('Oct  3');
-    // The evening-before activity is dated before the overnight break-in.
-    expect(log).toContain('Oct  1 22:30');
-    expect(log).toContain('Oct  2 02:15:44 harborline sshd[2140]: Accepted password for mwalker');
+    // Challenge 2 runs the week after challenge 1, not the same morning.
+    expect(log).not.toContain('Oct  2');
+    // The evening-before activity (Mon) is dated before the overnight break-in (Tue).
+    expect(log).toContain('Oct  5 22:30');
+    expect(log).toContain('Oct  6 02:15:44 harborline sshd[2140]: Accepted password for mwalker');
     // Files show a time, not a year, because the clock sits just after them.
     const listing = run(r, 'ls -l /var/log/auth.log');
     expect(listing).toMatch(/\d\d:\d\d \/var\/log\/auth\.log/);
