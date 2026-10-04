@@ -3,6 +3,7 @@ import { firstDay } from './firstDay';
 import { practice } from './practice';
 import { readingLogs } from './readingLogs';
 import { sandbox } from './sandbox';
+import { scheduledJob } from './scheduledJob';
 
 /** A short, optional warm-up that teaches the controls, outside the campaign ramp. */
 export const warmup: Challenge = practice;
@@ -11,7 +12,7 @@ export const warmup: Challenge = practice;
  * The campaign: the challenges that make up the game, in the order they are
  * played and unlocked. More are added here as they are built.
  */
-export const campaign: Challenge[] = [firstDay, readingLogs];
+export const campaign: Challenge[] = [firstDay, readingLogs, scheduledJob];
 
 /** Free play with no objectives, reached from its #sandbox link. */
 export const freePlay: Challenge = sandbox;

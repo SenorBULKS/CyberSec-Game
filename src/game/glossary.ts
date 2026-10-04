@@ -40,6 +40,14 @@ export const GLOSSARY: Record<string, string> = {
     'Logging in with a username and password stolen from somewhere else, betting the person reused them. Unlike brute-force guessing the password is already correct, so it can work on the first try and leaves almost no failed attempts.',
   monitoring:
     'Software that watches a system and raises an alert when something looks wrong, such as a sudden flood of failed logins.',
+  cron:
+    'The built-in Linux scheduler. It runs commands automatically at set times, reading jobs from `/etc/crontab`, the files in `/etc/cron.d`, and each user’s own list. A line starting `*/5 * * * *` means "every five minutes".',
+  'scheduled job':
+    'A command set to run automatically at a time or interval, rather than when a person types it. On Linux these are usually cron jobs. Attackers plant them to re-run their code after you clean up.',
+  persistence:
+    'Anything an attacker leaves behind so they keep access after the first break-in, without having to break in again. A scheduled job that re-adds a login key is a common example.',
+  'privilege escalation':
+    'Turning limited access into more powerful access, such as an ordinary user becoming root. A world-writable file or directory that root later uses is one way it happens.',
 };
 
 export function lookupTerm(term: string): string | undefined {
