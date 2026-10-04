@@ -22,16 +22,16 @@ function buildAuthLog(): string {
   const lines: string[] = [];
   const add = (date: string, time: string, text: string) => lines.push(`${date} ${time} harborline ${text}`);
 
-  // Thursday evening: a normal evening on the box, the day before the break-in.
-  add('Oct  1', '21:17:01', 'CRON[1831]: pam_unix(cron:session): session opened for user root(uid=0) by (uid=0)');
-  add('Oct  1', '21:17:01', 'CRON[1831]: pam_unix(cron:session): session closed for user root');
-  add('Oct  1', '22:30:11', 'sudo:   dortiz : TTY=pts/0 ; PWD=/home/dortiz ; USER=root ; COMMAND=/usr/bin/apt update');
-  add('Oct  1', '22:30:11', 'sudo: pam_unix(sudo:session): session opened for user root(uid=0) by dortiz(uid=1002)');
-  add('Oct  1', '22:30:19', 'sudo: pam_unix(sudo:session): session closed for user root');
-  add('Oct  1', '23:01:01', 'CRON[1902]: pam_unix(cron:session): session opened for user root(uid=0) by (uid=0)');
-  add('Oct  1', '23:01:02', 'CRON[1902]: pam_unix(cron:session): session closed for user root');
+  // Monday evening: a normal evening on the box, the day before the break-in.
+  add('Oct  5', '21:17:01', 'CRON[1831]: pam_unix(cron:session): session opened for user root(uid=0) by (uid=0)');
+  add('Oct  5', '21:17:01', 'CRON[1831]: pam_unix(cron:session): session closed for user root');
+  add('Oct  5', '22:30:11', 'sudo:   dortiz : TTY=pts/0 ; PWD=/home/dortiz ; USER=root ; COMMAND=/usr/bin/apt update');
+  add('Oct  5', '22:30:11', 'sudo: pam_unix(sudo:session): session opened for user root(uid=0) by dortiz(uid=1002)');
+  add('Oct  5', '22:30:19', 'sudo: pam_unix(sudo:session): session closed for user root');
+  add('Oct  5', '23:01:01', 'CRON[1902]: pam_unix(cron:session): session opened for user root(uid=0) by (uid=0)');
+  add('Oct  5', '23:01:02', 'CRON[1902]: pam_unix(cron:session): session closed for user root');
 
-  // Early Friday, 02:14 onward: an automated password-guessing run from one address.
+  // Early Tuesday, 02:14 onward: an automated password-guessing run from one address.
   const guesses = [
     ['02:14:03', 'invalid user admin', '40112'],
     ['02:14:05', 'invalid user admin', '40118'],
@@ -50,26 +50,27 @@ function buildAuthLog(): string {
   let pid = 2101;
   for (const [time, who, port] of guesses) {
     const forWho = who.startsWith('invalid user') ? who : `${who}`;
-    add('Oct  2', time, `sshd[${pid}]: Failed password for ${forWho} from ${ATTACKER_IP} port ${port} ssh2`);
+    add('Oct  6', time, `sshd[${pid}]: Failed password for ${forWho} from ${ATTACKER_IP} port ${port} ssh2`);
     pid += 3;
   }
   // The attempt that worked: Marcus's reused password, replayed from elsewhere.
-  add('Oct  2', '02:15:44', `sshd[2140]: Accepted password for mwalker from ${ATTACKER_IP} port 40631 ssh2`);
-  add('Oct  2', '02:15:44', 'sshd[2140]: pam_unix(sshd:session): session opened for user mwalker(uid=1000) by (uid=0)');
-  add('Oct  2', '02:19:58', 'sshd[2140]: pam_unix(sshd:session): session closed for user mwalker');
+  add('Oct  6', '02:15:44', `sshd[2140]: Accepted password for mwalker from ${ATTACKER_IP} port 40631 ssh2`);
+  add('Oct  6', '02:15:44', 'sshd[2140]: pam_unix(sshd:session): session opened for user mwalker(uid=1000) by (uid=0)');
+  add('Oct  6', '02:19:58', 'sshd[2140]: pam_unix(sshd:session): session closed for user mwalker');
 
-  // Friday morning: the team logs in as usual.
-  add('Oct  2', '08:02:10', 'sshd[2602]: Accepted publickey for dortiz from 10.20.0.31 port 52244 ssh2: RSA SHA256:9xP...');
-  add('Oct  2', '08:02:10', 'sshd[2602]: pam_unix(sshd:session): session opened for user dortiz(uid=1002) by (uid=0)');
-  add('Oct  2', '08:30:02', 'sshd[2733]: Accepted password for newhire from 10.20.0.31 port 52390 ssh2');
-  add('Oct  2', '08:30:02', 'sshd[2733]: pam_unix(sshd:session): session opened for user newhire(uid=1001) by (uid=0)');
+  // Tuesday morning: the team logs in as usual.
+  add('Oct  6', '08:02:10', 'sshd[2602]: Accepted publickey for dortiz from 10.20.0.31 port 52244 ssh2: RSA SHA256:9xP...');
+  add('Oct  6', '08:02:10', 'sshd[2602]: pam_unix(sshd:session): session opened for user dortiz(uid=1002) by (uid=0)');
+  add('Oct  6', '08:30:02', 'sshd[2733]: Accepted password for newhire from 10.20.0.31 port 52390 ssh2');
+  add('Oct  6', '08:30:02', 'sshd[2733]: pam_unix(sshd:session): session opened for user newhire(uid=1001) by (uid=0)');
   return lines.join('\n') + '\n';
 }
 
 function setup(): ChallengeSetup {
-  // It is the morning after the break-in: Friday, 2 Oct 2026, a few minutes
-  // past the team's morning logins. Every log line and mtime sits before this.
-  const machine = new Machine('harborline', new Date('2026-10-02T08:35:00'));
+  // It is the morning after the break-in: Tuesday, 6 Oct 2026, a few minutes
+  // past the team's morning logins, and a few days after challenge 1. Every
+  // log line and mtime sits before this.
+  const machine = new Machine('harborline', new Date('2026-10-06T08:35:00'));
   // You have been given the admin's own groups now: adm (to read logs) and sudo.
   machine.addUser({ name: 'newhire', uid: 1001, gecos: 'New Hire', password: 'harbor2026', groups: ['adm', 'sudo'] });
   machine.addUser({ name: 'mwalker', uid: 1000, gecos: 'Marcus Walker', homeMode: 0o755 });
@@ -83,7 +84,7 @@ function setup(): ChallengeSetup {
       'The monitoring box emailed overnight about a lot of failed SSH logins on\n' +
       'this server. Can you look at the auth log and tell me whether anyone\n' +
       'actually got in, and which address it came from? Sam can help.\n',
-    { ...me, mtime: new Date('2026-10-02T07:58:00') },
+    { ...me, mtime: new Date('2026-10-06T07:58:00') },
   );
   fs.writeFile('/home/newhire/.bashrc', '# ~/.bashrc\n', me);
 
@@ -92,20 +93,20 @@ function setup(): ChallengeSetup {
     owner: 'syslog',
     group: 'adm',
     mode: 0o640,
-    mtime: new Date('2026-10-02T08:30:02'),
+    mtime: new Date('2026-10-06T08:30:02'),
   });
   // A couple of other logs sit alongside it, so /var/log is worth a look.
   fs.writeFile(
     '/var/log/syslog',
-    'Oct  2 00:00:01 harborline rsyslogd: rsyslogd was HUPed\n' +
-      'Oct  2 08:12:33 harborline systemd[1]: Started tracking.service.\n',
-    { owner: 'syslog', group: 'adm', mode: 0o640, mtime: new Date('2026-10-02T08:12:33') },
+    'Oct  6 00:00:01 harborline rsyslogd: rsyslogd was HUPed\n' +
+      'Oct  6 08:12:33 harborline systemd[1]: Started tracking.service.\n',
+    { owner: 'syslog', group: 'adm', mode: 0o640, mtime: new Date('2026-10-06T08:12:33') },
   );
-  fs.writeFile('/var/log/dpkg.log', 'Oct  1 22:30:14 upgrade libc6:amd64 2.35-0ubuntu3.1 2.35-0ubuntu3.4\n', {
+  fs.writeFile('/var/log/dpkg.log', 'Oct  5 22:30:14 upgrade libc6:amd64 2.35-0ubuntu3.1 2.35-0ubuntu3.4\n', {
     owner: 'root',
     group: 'root',
     mode: 0o644,
-    mtime: new Date('2026-10-01T22:30:14'),
+    mtime: new Date('2026-10-05T22:30:14'),
   });
 
   return { machine, user: 'newhire' };
@@ -121,7 +122,7 @@ export const readingLogs: Challenge = {
   motd:
     'Welcome to Ubuntu 22.04.4 LTS (GNU/Linux 5.15.0-119-generic x86_64)\n\n' +
     'Harborline Logistics. Authorised staff only.\n\n' +
-    'Last login: Thu Oct  1 17:46:03 2026 from 10.20.0.31\n',
+    'Last login: Mon Oct  5 17:46:03 2026 from 10.20.0.31\n',
   briefing:
     'You have settled in as the junior sysadmin at Harborline. Overnight, the [[monitoring]] system reported a flood of failed SSH logins. ' +
     'Dana wants to know whether anyone actually broke in, and from what address. The answers are in the [[log file|log files]] under `/var/log`.',
@@ -263,7 +264,7 @@ export const readingLogs: Challenge = {
       },
       {
         title: 'The break-in you already half-knew',
-        text: 'The login that succeeded was `mwalker`, from the attacker’s address, using the same reused password you found on day one. The attacker did not guess it; they already had it and replayed it, which is why only a handful of `mwalker` attempts show before the `Accepted` line. One leaked, reused password is how a flood of noise turns into a real intrusion. Changing or locking that account would have stopped it.',
+        text: 'The login that succeeded was `mwalker`, from the attacker’s address, using the same reused password you found on day one — still live, because in the days since nobody had forced a reset or locked the account. The attacker did not guess it; they already had it and replayed it, which is why only a handful of `mwalker` attempts show before the `Accepted` line. One leaked, reused password is how a flood of noise turns into a real intrusion. Changing or locking that account would have stopped it.',
       },
       {
         title: 'Telling attacker from colleague',
