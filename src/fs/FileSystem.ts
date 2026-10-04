@@ -93,4 +93,11 @@ export class FileSystem {
     parent.node.children.set(basename(path), file);
     return file;
   }
+
+  /** Removes the node at a path from its parent directory. Returns false if it was not there. */
+  remove(path: string): boolean {
+    const parent = this.lookup(dirname(path));
+    if (!parent.ok || parent.node.type !== 'dir') return false;
+    return parent.node.children.delete(basename(path));
+  }
 }

@@ -167,6 +167,22 @@ export class Machine {
     this.sockets.push({ ...socket });
   }
 
+  /** The running process with this pid, if any. */
+  process(pid: number): Process | undefined {
+    return this.processes.find((p) => p.pid === pid);
+  }
+
+  /** Stops a process, as `kill` does, and drops any sockets it was holding. Returns it if it was running. */
+  removeProcess(pid: number): Process | undefined {
+    const index = this.processes.findIndex((p) => p.pid === pid);
+    if (index === -1) return undefined;
+    const [process] = this.processes.splice(index, 1);
+    for (let i = this.sockets.length - 1; i >= 0; i--) {
+      if (this.sockets[i].pid === pid) this.sockets.splice(i, 1);
+    }
+    return process;
+  }
+
   /** Installs a user's personal crontab, as it would live in the cron spool. */
   setCrontab(user: string, content: string, mtime?: Date) {
     this.fs.mkdir('/var/spool/cron/crontabs', { owner: 'root', group: 'crontab', mode: 0o1730 });
