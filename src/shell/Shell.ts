@@ -92,6 +92,8 @@ export class Shell implements Session {
   private outerSessions: SessionFrame[] = [];
   /** The command lines entered this session, for the `history` command. */
   private commandHistory: string[] = [];
+  /** Whether the last line's final command was a pager, so a lone `q` next is swallowed. */
+  private lastWasPager = false;
 
   constructor(options: ShellOptions = {}) {
     this.user = options.user ?? 'newhire';
@@ -240,12 +242,21 @@ export class Shell implements Session {
 
   execute(line: string, options: ExecOptions = {}): ExecResult {
     if (options.columns) this.columns = options.columns;
+
+    // A lone `q` right after `less` is the instinctive "quit the pager"; swallow it
+    // rather than reporting "q: command not found".
+    if (line.trim() === 'q' && this.lastWasPager) {
+      this.lastWasPager = false;
+      return this.finish('', this.lastExitCode, false);
+    }
+
     if (line.trim() !== '') {
       this.typed({ kind: 'line', text: line });
       this.commandHistory.push(line);
     }
 
     const parsed = parseProgram(line);
+    this.lastWasPager = parsed.ok && endsWithPager(parsed.stages);
     if (!parsed.ok) return this.finish(`bash: ${parsed.error}\n`, 2, false);
     if (parsed.stages.length === 0) return this.finish('', this.lastExitCode, false);
     return this.runProgram(parsed.stages);
@@ -530,6 +541,14 @@ export class Shell implements Session {
     this.lastExitCode = exitCode;
     return { output, exitCode, clearScreen };
   }
+}
+
+/** Whether a parsed line's final command is the pager, so a following lone `q` is swallowed. */
+function endsWithPager(stages: Stage[]): boolean {
+  const lastStage = stages[stages.length - 1];
+  const segment = lastStage?.pipeline[lastStage.pipeline.length - 1];
+  const name = segment?.words[0]?.map((f) => f.text).join('');
+  return name === 'less';
 }
 
 /** Splits a glob pattern into path components without breaking on an escaped slash. */

@@ -41,18 +41,58 @@ function sources(
   return files.map((file) => ({ name: file, text: readFileArg(ctx.session, tool, file, ctx.err) }));
 }
 
+/** Walks every file under each root for `grep -r`, reading each with the user's permissions. */
+function recursiveSources(ctx: CommandContext, roots: string[]): { name?: string; text: string | null }[] {
+  const who = ctx.session.credentials();
+  const results: { name?: string; text: string | null }[] = [];
+  const visit = (display: string) => {
+    const found = ctx.session.lookup(display);
+    if (!found.ok) {
+      ctx.err(`grep: ${display}: ${ERRORS[found.code]}\n`);
+      if (found.code === 'EACCES') denied(ctx.session, display);
+      results.push({ name: display, text: null });
+      return;
+    }
+    if (found.node.type === 'dir') {
+      // Listing needs read; descending into children needs search (x), as on a real box.
+      if (!canAccess(found.node, who, 'r') || !canAccess(found.node, who, 'x')) {
+        ctx.err(`grep: ${display}: ${ERRORS.EACCES}\n`);
+        denied(ctx.session, display);
+        results.push({ name: display, text: null });
+        return;
+      }
+      const base = display.replace(/\/+$/, '');
+      for (const name of [...found.node.children.keys()].sort()) {
+        visit(base === '' ? `/${name}` : `${base}/${name}`);
+      }
+    } else {
+      if (!canAccess(found.node, who, 'r')) {
+        ctx.err(`grep: ${display}: ${ERRORS.EACCES}\n`);
+        denied(ctx.session, display);
+        results.push({ name: display, text: null });
+        return;
+      }
+      ctx.session.emit({ type: 'read', path: ctx.session.resolve(display), user: ctx.session.user });
+      results.push({ name: display, text: found.node.content });
+    }
+  };
+  for (const root of roots) visit(root);
+  return results;
+}
+
 export const grep: Command = {
   name: 'grep',
-  summary: 'Print the lines that match a pattern (-i ignore case, -n line numbers, -v invert, -c count)',
+  summary: 'Print the lines that match a pattern (-i ignore case, -n line numbers, -v invert, -c count, -r recursive)',
   run(ctx) {
     const { out, err } = ctx;
-    const flags = { i: false, n: false, v: false, c: false };
+    const flags = { i: false, n: false, v: false, c: false, r: false };
     let pattern: string | undefined;
     const files: string[] = [];
     for (const arg of ctx.args) {
       if (pattern === undefined && arg.length > 1 && arg.startsWith('-')) {
         for (const ch of arg.slice(1)) {
-          if (ch in flags) flags[ch as keyof typeof flags] = true;
+          if (ch === 'R') flags.r = true;
+          else if (ch in flags) flags[ch as keyof typeof flags] = true;
           else {
             err(`grep: invalid option -- '${ch}'\n`);
             return 2;
@@ -65,7 +105,7 @@ export const grep: Command = {
       }
     }
     if (pattern === undefined) {
-      err('Usage: grep [OPTION]... PATTERN [FILE]...\n');
+      err("Usage: grep [OPTION]... PATTERNS [FILE]...\nTry 'grep --help' for more information.\n");
       return 2;
     }
     let regex: RegExp;
@@ -75,10 +115,12 @@ export const grep: Command = {
       err(`grep: ${pattern}: invalid regular expression\n`);
       return 2;
     }
-    const withName = files.length > 1;
+    const entries = flags.r ? recursiveSources(ctx, files.length > 0 ? files : ['.']) : sources('grep', files, ctx);
+    // With -r, or more than one file, each match is prefixed with its file name.
+    const withName = flags.r || files.length > 1;
     let error = false;
     let matched = false;
-    for (const source of sources('grep', files, ctx)) {
+    for (const source of entries) {
       if (source.text === null) {
         error = true;
         continue;
