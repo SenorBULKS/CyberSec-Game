@@ -80,6 +80,25 @@ describe('The Scheduled Job', () => {
     expect(r.getSnapshot().solved).toBe(true);
   });
 
+  it('keeps the expert panel and hints correct after removing the job first (QA expert edge)', () => {
+    const r = new ChallengeRun(scheduledJob, 'expert');
+    sudo(r, 'sudo rm /etc/cron.d/apt-compat');
+    expect(r.getSnapshot().solved).toBe(false);
+
+    // The expert "report the key" goal maps to submit, so it must still read as
+    // not done — the panel can't show every goal ticked while the run is unsolved.
+    const done = new Map(r.getSnapshot().objectives.map((o) => [o.id, o.done]));
+    const reportKey = scheduledJob.expertObjectives!.find((g) => g.id === 'report-key')!;
+    expect(done.get(reportKey.doneWhen)).toBe(false);
+
+    // And a hint is still available (not "every objective is done").
+    expect(r.nextHint()).toBeTruthy();
+
+    // Reporting the key finishes it.
+    run(r, 'submit harbor-ops@fleet');
+    expect(r.getSnapshot().solved).toBe(true);
+  });
+
   it('refuses a plain rm of the job and requires sudo', () => {
     const r = new ChallengeRun(scheduledJob);
     // /etc/cron.d is root-writable only now, so newhire cannot remove the file directly.
