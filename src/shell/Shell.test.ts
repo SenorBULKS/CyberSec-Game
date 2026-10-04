@@ -47,3 +47,55 @@ describe('Shell', () => {
     expect(new Shell().promptText()).toBe('newhire@harborline:~$ ');
   });
 });
+
+describe('Shell pipelines and redirection', () => {
+  it('pipes one command into another', () => {
+    const r = new Shell().execute('echo hello | cat');
+    expect(r.output).toBe('hello\n');
+    expect(r.exitCode).toBe(0);
+  });
+
+  it('does not also print a piped command’s output to the screen', () => {
+    // cat receives "hello" on stdin; the screen shows it once, not twice.
+    expect(new Shell().execute('echo hello | cat').output).toBe('hello\n');
+  });
+
+  it('writes output to a file with > and reads it back', () => {
+    const shell = new Shell();
+    expect(shell.execute('echo saved > note.txt').output).toBe('');
+    expect(shell.execute('cat note.txt').output).toBe('saved\n');
+  });
+
+  it('overwrites with > and adds on with >>', () => {
+    const shell = new Shell();
+    shell.execute('echo one > f.txt');
+    shell.execute('echo two >> f.txt');
+    expect(shell.execute('cat f.txt').output).toBe('one\ntwo\n');
+    shell.execute('echo fresh > f.txt');
+    expect(shell.execute('cat f.txt').output).toBe('fresh\n');
+  });
+
+  it('refuses to redirect into a file it may not write', () => {
+    const r = new Shell().execute('echo x > /etc/passwd');
+    expect(r.output).toBe('bash: /etc/passwd: Permission denied\n');
+    expect(r.exitCode).toBe(1);
+  });
+
+  it('refuses to redirect onto a directory', () => {
+    const r = new Shell().execute('echo x > /home');
+    expect(r.output).toBe('bash: /home: Is a directory\n');
+    expect(r.exitCode).toBe(1);
+  });
+
+  it('reports a missing command inside a pipeline', () => {
+    const r = new Shell().execute('echo hi | nope');
+    expect(r.output).toBe('nope: command not found\n');
+    expect(r.exitCode).toBe(127);
+  });
+
+  it('reports a bad command in a pipeline before piping', () => {
+    const r = new Shell().execute('echo hi | grep');
+    // grep is not added until a later chunk, so it is still "command not found".
+    expect(r.exitCode).toBe(127);
+  });
+});

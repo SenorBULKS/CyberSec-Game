@@ -6,7 +6,12 @@ import { denied } from './denied';
 export const cat: Command = {
   name: 'cat',
   summary: 'Show what is inside a file ("concatenate")',
-  run({ args, out, err, session }) {
+  run({ args, input, out, err, session }) {
+    // With no file names, cat passes along whatever was piped into it.
+    if (args.length === 0) {
+      out(input);
+      return 0;
+    }
     let status = 0;
     for (const arg of args) {
       const found = session.lookup(arg);
