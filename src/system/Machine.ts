@@ -20,6 +20,58 @@ export interface Group {
   members: string[];
 }
 
+/** A running process, as `ps` would list it. */
+export interface Process {
+  pid: number;
+  user: string;
+  /** Controlling terminal, '?' for daemons with none. */
+  tty: string;
+  /** Process state letters, e.g. 'Ss', 'S', 'R'. */
+  stat: string;
+  /** The full command line. */
+  command: string;
+}
+
+/** A socket a service is listening on, as `ss` would list it. */
+export interface ListeningSocket {
+  proto: 'tcp' | 'udp';
+  /** Local address, e.g. '0.0.0.0' or '127.0.0.1'. */
+  address: string;
+  port: number;
+  /** "name" of the process holding it, for `ss -p`. */
+  process?: string;
+  /** Its pid, for `ss -p`. */
+  pid?: number;
+}
+
+/** A newly spawned process; the pid is assigned if left out. */
+export interface NewProcess {
+  user: string;
+  command: string;
+  tty?: string;
+  stat?: string;
+  pid?: number;
+}
+
+// The daemons a fresh Ubuntu 22.04 server runs, for `ps`.
+const SYSTEM_PROCESSES: Process[] = [
+  { pid: 1, user: 'root', tty: '?', stat: 'Ss', command: '/sbin/init' },
+  { pid: 2, user: 'root', tty: '?', stat: 'S', command: '[kthreadd]' },
+  { pid: 324, user: 'root', tty: '?', stat: 'Ss', command: '/lib/systemd/systemd-journald' },
+  { pid: 361, user: 'root', tty: '?', stat: 'Ss', command: '/lib/systemd/systemd-udevd' },
+  { pid: 598, user: 'systemd-timesync', tty: '?', stat: 'Ssl', command: '/lib/systemd/systemd-timesyncd' },
+  { pid: 701, user: 'root', tty: '?', stat: 'Ss', command: '/usr/sbin/cron -f' },
+  { pid: 702, user: 'message+', tty: '?', stat: 'Ss', command: '/usr/bin/dbus-daemon --system' },
+  { pid: 745, user: 'syslog', tty: '?', stat: 'Ssl', command: '/usr/sbin/rsyslogd -n -iNONE' },
+  { pid: 788, user: 'root', tty: '?', stat: 'Ss', command: '/usr/sbin/sshd -D' },
+];
+
+// Listening sockets on that fresh server: just SSH.
+const SYSTEM_SOCKETS: ListeningSocket[] = [
+  { proto: 'tcp', address: '0.0.0.0', port: 22, process: 'sshd', pid: 788 },
+  { proto: 'tcp', address: '[::]', port: 22, process: 'sshd', pid: 788 },
+];
+
 export interface NewUser {
   name: string;
   uid: number;
@@ -61,6 +113,9 @@ export class Machine {
   readonly fs: FileSystem;
   readonly accounts: Account[] = SYSTEM_ACCOUNTS.map((a) => ({ ...a }));
   readonly groupList: Group[] = SYSTEM_GROUPS.map((g) => ({ ...g, members: [...g.members] }));
+  readonly processes: Process[] = SYSTEM_PROCESSES.map((p) => ({ ...p }));
+  readonly sockets: ListeningSocket[] = SYSTEM_SOCKETS.map((s) => ({ ...s }));
+  private nextPid = 1000;
 
   constructor(
     readonly hostname: string,
@@ -91,6 +146,24 @@ export class Machine {
 
   account(name: string): Account | undefined {
     return this.accounts.find((a) => a.name === name);
+  }
+
+  /** Adds a running process, e.g. a challenge's rogue service. Returns its pid. */
+  addProcess(process: NewProcess): number {
+    const pid = process.pid ?? this.nextPid++;
+    this.processes.push({
+      pid,
+      user: process.user,
+      tty: process.tty ?? '?',
+      stat: process.stat ?? 'Ss',
+      command: process.command,
+    });
+    return pid;
+  }
+
+  /** Adds a listening socket, e.g. a service a challenge starts. */
+  addSocket(socket: ListeningSocket) {
+    this.sockets.push({ ...socket });
   }
 
   /** The groups a user belongs to: their own group first, then any extras. */
