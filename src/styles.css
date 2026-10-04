@@ -581,6 +581,21 @@ button:focus-visible {
   color: var(--accent);
 }
 
+.challenge-card.locked {
+  opacity: 0.6;
+}
+
+.challenge-card.locked h3::before {
+  content: '🔒';
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+.challenge-status.status-locked {
+  margin-left: auto;
+  border-style: dashed;
+}
+
 .challenge-actions {
   display: flex;
   flex-wrap: wrap;
