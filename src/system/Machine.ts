@@ -108,7 +108,7 @@ export class Machine {
     return { user: name, uid: account.uid, groups: this.groupsOf(name).map((g) => g.name) };
   }
 
-  /** Keeps /etc/passwd and /etc/group in step with the account list, as on a real system. */
+  /** Keeps /etc/passwd, /etc/group and /etc/shadow in step with the account list, as on a real system. */
   private writeAccountFiles() {
     const passwd = this.accounts
       .map((a) => [a.name, 'x', a.uid, a.gid, a.gecos, a.home, a.shell].join(':'))
@@ -116,5 +116,30 @@ export class Machine {
     const group = this.groupList.map((g) => [g.name, 'x', g.gid, g.members.join(',')].join(':')).join('\n');
     this.fs.writeFile('/etc/passwd', passwd + '\n');
     this.fs.writeFile('/etc/group', group + '\n');
+    // Only root and the shadow group may read password hashes.
+    const shadow = this.accounts.map((a) => `${a.name}:${shadowHash(a)}:20359:0:99999:7:::`).join('\n');
+    this.fs.writeFile('/etc/shadow', shadow + '\n', { group: 'shadow', mode: 0o640 });
   }
+}
+
+const HASH_ALPHABET = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+
+/**
+ * A stand-in for the yescrypt hash Ubuntu stores: same shape, deterministic,
+ * and impossible to turn back into the password (it is not derived from it).
+ */
+function shadowHash(account: Account): string {
+  if (account.uid < 1000 || account.name === 'nobody') return '*';
+  if (account.password === undefined) return '!';
+  let seed = 0;
+  for (const ch of account.name) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+  const chars = (n: number) => {
+    let out = '';
+    for (let i = 0; i < n; i++) {
+      seed = (seed * 1103515245 + 12345) >>> 0;
+      out += HASH_ALPHABET[seed % 64];
+    }
+    return out;
+  };
+  return `$y$j9T$${chars(22)}$${chars(43)}`;
 }

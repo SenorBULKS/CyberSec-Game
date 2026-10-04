@@ -7,7 +7,14 @@ import { Machine } from '../system/Machine';
  */
 export function createSandboxShell(): Shell {
   const machine = new Machine('harborline');
-  machine.addUser({ name: 'mwalker', uid: 1000, gecos: 'Marcus Walker', groups: ['sudo'], homeMode: 0o755 });
+  machine.addUser({
+    name: 'mwalker',
+    uid: 1000,
+    gecos: 'Marcus Walker',
+    password: 'letmein',
+    groups: ['sudo'],
+    homeMode: 0o755,
+  });
   machine.addUser({ name: 'newhire', uid: 1001 });
 
   const fs = machine.fs;

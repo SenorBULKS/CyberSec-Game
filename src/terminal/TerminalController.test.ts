@@ -2,12 +2,13 @@
 import { Terminal } from '@xterm/headless';
 import { describe, expect, it } from 'vitest';
 import { Shell } from '../shell/Shell';
+import { Machine } from '../system/Machine';
 import { TerminalController } from './TerminalController';
 
 /** A real (headless) xterm.js emulator, so tests check what the player actually sees. */
-async function setup(cols = 80) {
+async function setup(cols = 80, shell = new Shell()) {
   const term = new Terminal({ cols, rows: 24, allowProposedApi: true });
-  const ctl = new TerminalController(term, new Shell(), 'Welcome.\n\n');
+  const ctl = new TerminalController(term, shell, { motd: 'Welcome.\n\n', wait: (_ms, then) => then() });
   const flush = () => new Promise<void>((resolve) => term.write('', resolve));
   const type = async (data: string) => {
     ctl.handleInput(data);
@@ -27,6 +28,13 @@ async function setup(cols = 80) {
 }
 
 const PROMPT = 'newhire@harborline:~$ ';
+
+function practiceShell() {
+  const machine = new Machine('harborline');
+  machine.addUser({ name: 'mwalker', uid: 1000, password: 'letmein' });
+  machine.addUser({ name: 'newhire', uid: 1001 });
+  return new Shell({ machine });
+}
 
 describe('TerminalController', () => {
   it('shows the welcome text and a prompt with the cursor after it', async () => {
@@ -93,6 +101,43 @@ describe('TerminalController', () => {
     expect(t.screen()).toEqual([PROMPT]);
     await t.type('echo two\recho x\x0c');
     expect(t.screen()).toEqual([PROMPT + 'echo x']);
+  });
+
+  it('asks for a password without showing it, then becomes the other user', async () => {
+    const t = await setup(80, practiceShell());
+    await t.type('su mwalker\r');
+    expect(t.screen().at(-1)).toBe('Password: ');
+    await t.type('letmein');
+    expect(t.screen().at(-1)).toBe('Password: ');
+    expect(t.cursor().x).toBe('Password: '.length);
+    await t.type('\r');
+    // Like real su without '-', the directory stays where it was.
+    expect(t.screen().at(-1)).toBe('mwalker@harborline:/home/newhire$ ');
+    await t.type('whoami\r');
+    expect(t.screen().slice(-2)).toEqual(['mwalker', 'mwalker@harborline:/home/newhire$ ']);
+    await t.type('exit\r');
+    expect(t.screen().slice(-2)).toEqual(['exit', PROMPT]);
+  });
+
+  it('says "Authentication failure" for a wrong password', async () => {
+    const t = await setup(80, practiceShell());
+    await t.type('su mwalker\rguess\r');
+    expect(t.screen().slice(-3)).toEqual(['Password: ', 'su: Authentication failure', PROMPT]);
+  });
+
+  it('never puts a typed password into the command history', async () => {
+    const t = await setup(80, practiceShell());
+    await t.type('su mwalker\rletmein\rexit\r');
+    await t.type('\x1b[A\x1b[A\x1b[A');
+    expect(t.screen().at(-1)).toBe(PROMPT + 'su mwalker');
+  });
+
+  it('cancels a password prompt with Ctrl+C', async () => {
+    const t = await setup(80, practiceShell());
+    await t.type('su mwalker\rlet\x03');
+    expect(t.screen().slice(-2)).toEqual(['Password: ^C', PROMPT]);
+    await t.type('whoami\r');
+    expect(t.screen().at(-2)).toBe('newhire');
   });
 
   it('starts the next prompt on a new line after output without a newline', async () => {

@@ -52,6 +52,11 @@ export class LineEditor {
   private draft = '';
   /** Whether the previous key was Tab, so a second Tab can list the choices. */
   private lastWasTab = false;
+  /**
+   * Password entry: the line is not shown, not saved to history, and the
+   * arrow keys cannot pull earlier commands into it.
+   */
+  secret = false;
 
   /** Feeds raw terminal input (one key or a whole paste). Returns what happened. */
   feed(data: string): EditorEvent[] {
@@ -109,7 +114,7 @@ export class LineEditor {
         const line = this.buffer;
         // Ubuntu's default HISTCONTROL=ignoreboth: skip blank lines, lines that
         // start with a space, and repeats of the previous command.
-        if (line.trim() !== '' && !line.startsWith(' ') && this.history.at(-1) !== line) {
+        if (!this.secret && line.trim() !== '' && !line.startsWith(' ') && this.history.at(-1) !== line) {
           this.history.push(line);
         }
         this.resetLine();
@@ -160,14 +165,14 @@ export class LineEditor {
         return;
       }
       case 'up':
-        if (this.historyIndex > 0) {
+        if (!this.secret && this.historyIndex > 0) {
           if (this.historyIndex === this.history.length) this.draft = this.buffer;
           this.historyIndex--;
           this.setLine(this.history[this.historyIndex]);
         }
         return;
       case 'down':
-        if (this.historyIndex < this.history.length) {
+        if (!this.secret && this.historyIndex < this.history.length) {
           this.historyIndex++;
           this.setLine(
             this.historyIndex === this.history.length ? this.draft : this.history[this.historyIndex],

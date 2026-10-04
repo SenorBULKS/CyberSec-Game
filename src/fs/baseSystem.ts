@@ -17,7 +17,7 @@ UBUNTU_CODENAME=jammy
 const ELF = '\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x03\x00>\x00\x01\x00\x00\x00';
 
 /** Programs that exist as files on disk (shell builtins like `cd` do not). */
-export const PROGRAMS = ['cat', 'clear', 'echo', 'hostname', 'id', 'ls', 'pwd', 'whoami'];
+export const PROGRAMS = ['cat', 'clear', 'echo', 'hostname', 'id', 'ls', 'pwd', 'su', 'whoami'];
 
 /**
  * The Ubuntu 22.04 skeleton every challenge starts from: standard top-level
@@ -37,6 +37,8 @@ export function createBaseSystem(hostname: string): FileSystem {
   fs.mkdir('/var/tmp', { mode: 0o1777 });
 
   for (const name of PROGRAMS) fs.writeFile(`/usr/bin/${name}`, ELF, { mode: 0o755 });
+  // su runs as root whoever starts it (setuid), so it can check any user's password.
+  fs.writeFile('/usr/bin/su', ELF, { mode: 0o4755 });
 
   fs.writeFile('/etc/hostname', `${hostname}\n`);
   fs.writeFile('/etc/os-release', OS_RELEASE);
